@@ -8,13 +8,12 @@ module.exports = {
         console.log('all sources: ' + sources);
 
         var source = entity.pos.findClosestByRange(sources);
-        console.log('closest source: ' + exclude + ' (id: ' + exclude.id + ')');
+        console.log('closest source: ' + source + ' (id: ' + source.id + ')');
 
         if(!source.id) {
             console.log('Resource Selector: Unable to select closest resource (are there any in the room?)');
             return false;
         }
-        
         return source.id;
     },
 
