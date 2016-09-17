@@ -9,6 +9,9 @@ module.exports = {
         //vars
         var buildingTemplate = require('build.' + creep.room.template);
 
+        //todo : remove temp line
+        buildingTemplate.build(creep.room);
+
         // initiate
         if(!creep.memory.initiated) {
             creep.memory.activity = 'harvesting';
