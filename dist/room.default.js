@@ -96,7 +96,7 @@ module.exports = {
             }
 
             // create <amount> bigger upgraders
-            amount = 5;
+            amount = 4;
             if(room.upgraders < amount) {
                 var blueprint = require('z.550upgrader');
                 var avaialableSpawn = go.findAvailableSpawnInRoom(room);
