@@ -9,10 +9,12 @@ module.exports = {
     selectSecondClosestTo: function(entity) {
         var sources = entity.room.find(FIND_SOURCES);
         var exclude = entity.pos.findClosestByPath(FIND_SOURCES);
-        var source = _.find(sources, function(source) { return source != exclude });
+        var source = _.find(sources, function(source) {
+            return source.id != exclude.id
+        });
         
         if(!source.id) {
-            exclude.id = source.id
+            source.id = exclude.id;
         }
         //console.log(source.id);
         return source.id;
