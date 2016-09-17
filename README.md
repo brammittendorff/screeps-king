@@ -15,7 +15,8 @@ npm install grunt-screeps
 ```
 
 Then we need to set the enviroment variables
-Note: If you log in through Steam or Github, you can still set your email address and password for this to work
+
+_Note: If you log in through Steam or Github, you can still set your email address and password for this to work_
 
 * Windows
 
