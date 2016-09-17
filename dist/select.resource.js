@@ -2,8 +2,19 @@ module.exports = {
 
     selectClosestTo: function(entity) {
         var room = entity.room;
-        var source = entity.pos.findClosestByRange(room.sources);
-        //console.log(source.id);
+        console.log(room.name);
+
+        var sources = room.find(FIND_SOURCES);
+        console.log('all sources: ' + sources);
+
+        var source = entity.pos.findClosestByRange(sources);
+        console.log('closest source: ' + exclude + ' (id: ' + exclude.id + ')');
+
+        if(!source.id) {
+            console.log('Resource Selector: Unable to select closest resource (are there any in the room?)');
+            return false;
+        }
+        
         return source.id;
     },
 
