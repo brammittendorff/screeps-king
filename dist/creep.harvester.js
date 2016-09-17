@@ -17,11 +17,6 @@ module.exports = {
             creep.say('Work Work!');
         }
 
-        // failsafe for if source is not properly selected
-        if(!creep.memory.targetSourceId) {
-            creep.memory.targetSourceId = resourceSelector.selectClosestTo(creep);
-        }
-
         // When full, change this creeps harvesting spot and switch to upgrading
         if(creep.memory.activity == 'harvesting') {
             if(creep.carryCapacity != creep.carry.energy) {
