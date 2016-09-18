@@ -1,7 +1,26 @@
 module.exports = function(grunt) {
+
+  // load npm tasks
   grunt.loadNpmTasks('grunt-screeps');
   grunt.loadNpmTasks('grunt-contrib-watch');
+  grunt.loadNpmTasks('grunt-contrib-concat');
+
+  // grunt init config
   grunt.initConfig({
+    concat: {
+      options: {
+        banner: 'var component = {};\n\n',
+        footer: '\nmodule.exports = component;'
+      },
+      dist_ai: {
+        src: ['src/ai/*.js'],
+        dest: 'dist/ai.js'
+      },
+      dist_templates: {
+        src: ['src/templates/*.js'],
+        dest: 'dist/templates.js'
+      }
+    },
     screeps: {
       options: {
         email: process.env.EMAIL,
@@ -14,13 +33,17 @@ module.exports = function(grunt) {
     },
     watch: {
       scripts: {
-        files: ['dist/*.js'],
-        tasks: ['screeps'],
+        files: ['src/*/*.js'],
+        tasks: ['concat', 'screeps'],
         options: {
           interrupt: false
         }
       }
     }
   });
-  grunt.registerTask('default', 'screeps');
+
+  // register tasks
+  grunt.registerTask('default', ['concat', 'screeps']);
+  grunt.registerTask('sync', ['concat', 'screeps']);
+
 };

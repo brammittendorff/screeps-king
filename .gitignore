@@ -1,2 +1,6 @@
 node_modules/
 npm-debug.log
+.idea/
+bower_components/
+dist/ai.js
+dist/templates.js

@@ -11,6 +11,9 @@
     "grunt-env": "^0.4.4",
     "grunt-screeps": "^1.2.1"
   },
+  "devDependencies": {
+    "grunt-contrib-concat": "^1.0.1"
+  },
   "scripts": {
     "test": "mocha"
   },
