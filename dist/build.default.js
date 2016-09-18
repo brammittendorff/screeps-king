@@ -16,6 +16,8 @@ module.exports = {
         // Determine roads between points of interest, avoiding workingspace, within this room
         var roadsSpace = this.determineSpaceForRoadsBetweenLocationObjectsArrayAvoidingLocationsObjectsArrayInRoom(POIs, workingSpace, room);
 
+        // roadsSpace[0]. //build road
+
     },
 
     determineSpaceForRoadsBetweenLocationObjectsArrayAvoidingLocationsObjectsArrayInRoom: function(locationObjectsArray, avoidLocationObjectsArray, room) {
