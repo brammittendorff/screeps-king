@@ -8,7 +8,7 @@ Object.assign(component, {
       // initiate
       if (!cMemory.initiated) {
         cMemory.activity = 'harvesting';
-        cMemory.targetSourceId = global.resourceSelector.selectClosestTo(creep);
+        cMemory.targetSourceId = global.resourceSelector.selectSecondClosestTo(creep);
         cMemory.initiated = true;
         creep.say('++RCL;');
       }
@@ -23,6 +23,7 @@ Object.assign(component, {
         this.upgrade(creep);
       }
 
+      this.saveState(creep, cMemory);
     },
 
     harvest: function (creep) {
@@ -39,6 +40,7 @@ Object.assign(component, {
         this.upgrade(creep);
       }
 
+      this.saveState(creep, cMemory);
     },
 
     upgrade: function (creep) {
@@ -53,6 +55,15 @@ Object.assign(component, {
         creep.say('Crystals!');
         this.harvest(creep);
       }
+
+      this.saveState(creep, cMemory);
+    },
+
+    saveState: function(creep, cMemory) {
+
+      // save the object that we just used this tick
+      creep.memory = cMemory;
+
     }
 
   }

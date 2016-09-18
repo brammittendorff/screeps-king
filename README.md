@@ -54,6 +54,12 @@ After that we can push our files
 grunt screeps
 ```
 
+Or the shorthand version of both actions
+
+```
+grunt sync
+```
+
 ## Auto-sync
 
 Should you wish to auto-sync any save directly to the game, this is possible using grunt-contrib-watch.

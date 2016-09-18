@@ -22,6 +22,7 @@ Object.assign(component, {
           var targetSource = Game.getObjectById(cMemory.targetSourceId);
           if (creep.harvest(targetSource) == ERR_NOT_IN_RANGE) {
             creep.moveTo(targetSource);
+            this.saveState(creep, cMemory);
             return;
           }
         } else {
@@ -58,11 +59,12 @@ Object.assign(component, {
           if (targets.length > 0) {
             if (creep.transfer(targets[0], RESOURCE_ENERGY) == ERR_NOT_IN_RANGE) {
               creep.moveTo(targets[0]);
+              this.saveState(creep, cMemory);
               return;
             }
           } else {
             cMemory.activity = 'building';
-            //creep.say('Work Work!');
+            creep.say('Lok\'tar!');
           }
         } else {
           cMemory.activity = 'harvesting';
@@ -76,7 +78,7 @@ Object.assign(component, {
         if (creep.carry.energy != 0) {
           // what was i doing exactly?
           if (!cMemory.buildMode) {
-            cMemory.buildMode = _.random(1, 2); // 1 = build, 2 = repair
+            cMemory.buildMode = creep.memory.buildMode = _.random(1, 2); // 1 = build, 2 = repair
             switch (cMemory.buildMode) {
               case 1:
                 creep.say('Build!');
@@ -95,6 +97,7 @@ Object.assign(component, {
             if (targets.length > 0) {
               if (creep.build(targets[0]) == ERR_NOT_IN_RANGE) {
                 creep.moveTo(targets[0]);
+                this.saveState(creep, cMemory);
                 return;
               }
             } else {
@@ -102,7 +105,7 @@ Object.assign(component, {
               // create new building if needed
 
               //if(creep.carry.energy < creep.carryCapacity) {
-              cMemory.activity = 'harvesting';
+              cMemory.activity = creep.memory.activity = 'harvesting';
               //}
 
             }
@@ -120,20 +123,29 @@ Object.assign(component, {
               console.log(targets[0].name);
               if (creep.repair(targets[0]) == ERR_NOT_IN_RANGE) {
                 creep.moveTo(targets[0]);
+                this.saveState(creep, cMemory);
                 return;
               }
             } else {
               // nothing to repair, back to buildmode
               creep.say('Build.');
-              cMemory.buildMode = 1;
+              cMemory.buildMode = creep.memory.buildMode = 1;
             }
           }
         } else {
-          cMemory.buildMode = false;
-          cMemory.activity = 'harvesting';
+          cMemory.buildMode = creep.memory.buildMode = false;
+          cMemory.activity = creep.memory.buildMode = 'harvesting';
           creep.say('Need moarr!');
         }
       }
+
+      this.saveState(creep, cMemory);
+    },
+
+    saveState: function(creep, cMemory) {
+
+      // save the object that we just used this tick
+      creep.memory = cMemory;
 
     }
 
