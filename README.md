@@ -22,21 +22,21 @@ _**Note:** If you log in through Steam or Github, you can still set your Screeps
 
 Set Environment Variables in of of the two ways below
 
-##### For just 1 CMD session (CMD Environment Variables):
+##### 1 only for the current CMD session (CMD Environment Variables):
 
 ```
 set SCREEPS_EMAIL=your_email@example.com
 set SCREEPS_PASSWORD=yourpassword
 ```
 
-##### Permanently (System Environment Variables):
-
-_**Note:** This will expose the variables to your system, for anyone to see and will require you to restart your terminal to take effect._
+##### 2 Permanently (System Environment Variables):
 
 ```
 setx SCREEPS_EMAIL your_email@example.com
 setx SCREEPS_PASSWORD yourpassword
 ```
+
+_**Note:** This will expose the variables to your system, for anyone to see and will require you to restart your terminal to take effect._
 
 #### Linux / Mac OS X
 
