@@ -37,9 +37,9 @@ module.exports = {
 
         // priority order
         var structuresPriority = [
-            STRUCTURE_TOWER,
-            STRUCTURE_EXTENSION,
-            STRUCTURE_SPAWN
+          STRUCTURE_TOWER,
+          STRUCTURE_EXTENSION,
+          STRUCTURE_SPAWN
         ];
 
         var targets = [];
@@ -78,9 +78,9 @@ module.exports = {
         if (!cMemory.buildMode) {
           cMemory.buildMode = _.random(1,2); // 1 = build, 2 = repair
           switch (cMemory.buildMode) {
-            case 1:  creep.say('Build!'); break;
-            case 2:  creep.say('Repair!'); break;
-            default: creep.say('Huh?!'); break;
+          case 1:  creep.say('Build!'); break;
+          case 2:  creep.say('Repair!'); break;
+          default: creep.say('Huh?!'); break;
           }
         }
         // build
