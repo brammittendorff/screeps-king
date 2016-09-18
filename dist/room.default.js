@@ -1,6 +1,6 @@
 var go = require('process.go');
 
-ai = require('ai');
+var ai = require('ai');
 global.templates = require('templates');
 global.resourceSelector = require('select.resource');
 
@@ -14,7 +14,6 @@ module.exports = {
 
     //vars
     var i;
-    var ai;
     var rMemory = room.memory;
 
     // task creeps
@@ -119,6 +118,15 @@ module.exports = {
     var bp;
     var spawn;
     if (room.harvesters < amount) {
+      if(room.harvesters < 1) {
+        // todo: remove this failover using a better function
+        var bp = global.templates['_300harvester'];
+        var spawn = go.findAvailableSpawnInRoom(room);
+        if (spawn.canCreateCreep(bp.body, bp.name, bp.memory) == 0) {
+          spawn.createCreep(bp.body, bp.name, bp.memory);
+          return;
+        }
+      }
       if (room.energyCapacityAvailable >= 800) {
         if (room.energyAvailable < 800) {
           return;
