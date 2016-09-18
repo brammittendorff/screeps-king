@@ -11,6 +11,7 @@ module.exports = {
 
     // task creeps
     var creeps = room.find(FIND_MY_CREEPS);
+    var rMemory = room.memory;
     go.taskCreepsByTheirRoles(creeps);
 
     // task towers
@@ -36,19 +37,19 @@ module.exports = {
      * SET STAGE
      */
 
-    if (!room.memory.stage) {
-      room.memory.stage = 0;
+    if (!rMemory.stage) {
+      rMemory.stage = 0;
     }
 
     /**
      * STAGE 0: Build initial creeps
      */
 
-    if (room.memory.stage == 0) {
+    if (rMemory.stage == 0) {
 
       // advance to next room?
       if (room.energyCapacityAvailable >= 550) {
-        room.memory.stage = 1;
+        rMemory.stage = 1;
         return;
       }
 
@@ -70,7 +71,7 @@ module.exports = {
       }
 
       // create first <amount> upgraders
-      amount = 5;
+      var amount = 5;
       if (room.upgraders < amount) {
         var bp = require('z.300upgrader');
         var spawn = go.findAvailableSpawnInRoom(room);
@@ -87,7 +88,7 @@ module.exports = {
      * STAGE 1: Build larger creeps
      */
 
-    if (room.memory.stage == 1) {
+    if (rMemory.stage == 1) {
 
       if (room.energyAvailable < 550) {
         return;

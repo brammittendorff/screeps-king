@@ -4,13 +4,12 @@ module.exports = {
 
   /** @param {Creep} creep **/
   task: function(creep) {
-
     var cMemory = creep.memory;
 
     // initiate
     if (!cMemory.initiated) {
       cMemory.activity = 'harvesting';
-      cMemory.targetSourceId = resourceSelector.selectSecondClosestTo(creep);
+      cMemory.targetSourceId = resourceSelector.selectClosestTo(creep);
       cMemory.initiated = true;
       creep.say('++RCL;');
     }
@@ -28,6 +27,8 @@ module.exports = {
   },
 
   harvest: function(creep) {
+    var cMemory = creep.memory;
+
     if (creep.carryCapacity > creep.carry.energy) {
       var targetSource = Game.getObjectById(cMemory.targetSourceId);
       if (creep.harvest(targetSource) == ERR_NOT_IN_RANGE) {
@@ -42,6 +43,7 @@ module.exports = {
   },
 
   upgrade: function(creep) {
+    var cMemory = creep.memory;
     var controller = creep.room.controller;
     if (creep.carry.energy != 0) {
       if (creep.upgradeController(controller) == ERR_NOT_IN_RANGE) {

@@ -11,7 +11,7 @@ module.exports = {
     return source.id;
   },
 
-  selectSecondClosestTo: function(entity) {
+  selectClosestTo: function(entity) {
 
     var room = entity.room;
     var sources = room.find(FIND_SOURCES);
