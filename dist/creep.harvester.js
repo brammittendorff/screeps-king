@@ -107,12 +107,14 @@ module.exports = {
                 }
                 // repair
                 if(creep.memory.buildMode == 2) {
+                    console.log('buildmode repair');
                     var targets = creep.room.find(FIND_MY_STRUCTURES, {
                         filter: function(structure) {
                             return ( structure.hits < structure.hitsMax )
                         }
                     });
-                    if(targets.length > 0) {
+                    console.log('repair targets: ' + targets);
+                    if(targets.length) {
                         console.log(targets[0].name);
                         if(creep.repair(targets[0]) == ERR_NOT_IN_RANGE) {
                             creep.moveTo(targets[0]);
