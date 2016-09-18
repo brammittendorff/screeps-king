@@ -84,9 +84,11 @@ module.exports = {
 
     // create first <amount> harvesters
     var amount = 3; // no more than spaces for resource closest tot spawn
+    var bp;
+    var spawn;
     if (room.harvesters < amount) {
-      var bp = global.templates['_300harvester'];
-      var spawn = go.findAvailableSpawnInRoom(room);
+      bp = global.templates['_300harvester'];
+      spawn = go.findAvailableSpawnInRoom(room);
       if (spawn.canCreateCreep(bp.body, bp.name, bp.memory) == 0) {
         spawn.createCreep(bp.body, bp.name, bp.memory);
         return;
@@ -120,8 +122,8 @@ module.exports = {
     if (room.harvesters < amount) {
       if (room.harvesters < 1) {
         // todo: remove this failover using a better function
-        var bp = global.templates['_300harvester'];
-        var spawn = go.findAvailableSpawnInRoom(room);
+        bp = global.templates['_300harvester'];
+        spawn = go.findAvailableSpawnInRoom(room);
         if (spawn.canCreateCreep(bp.body, bp.name, bp.memory) == 0) {
           spawn.createCreep(bp.body, bp.name, bp.memory);
           return;

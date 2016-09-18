@@ -4,3 +4,5 @@ npm-debug.log
 bower_components/
 dist/ai.js
 dist/templates.js
+.tern-project
+ScreepsAutocomplete/

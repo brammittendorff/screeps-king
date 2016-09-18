@@ -6,6 +6,9 @@ module.exports = function(grunt) {
   grunt.loadNpmTasks('grunt-contrib-concat');
   grunt.loadNpmTasks('grunt-eslint');
 
+  // unix LF
+  grunt.util.linefeed = '\n';
+
   // grunt init config
   grunt.initConfig({
     concat: {
@@ -23,7 +26,7 @@ module.exports = function(grunt) {
       }
     },
     eslint: {
-      target: 'dist/*.js'
+      target: ['dist/*.js', 'src/*/*.js']
     },
     screeps: {
       options: {
@@ -38,7 +41,7 @@ module.exports = function(grunt) {
     watch: {
       scripts: {
         files: ['src/*/*.js'],
-        tasks: ['concat', 'screeps', 'eslint'],
+        tasks: ['concat', 'eslint', 'screeps'],
         options: {
           interrupt: false
         }
@@ -47,7 +50,7 @@ module.exports = function(grunt) {
   });
 
   // register tasks
-  grunt.registerTask('default', ['concat', 'screeps', 'eslint']);
-  grunt.registerTask('sync', ['concat', 'screeps', 'eslint']);
+  grunt.registerTask('default', ['concat', 'eslint', 'screeps']);
+  grunt.registerTask('sync', ['concat', 'eslint', 'screeps']);
 
 };

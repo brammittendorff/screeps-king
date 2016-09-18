@@ -48,11 +48,12 @@ module.exports.loop = function() {
     }
 
     // require room template
+    var template;
     try {
-      var template = require('room.' + room.template);
+      template = require('room.' + room.template);
     } catch (e) {
       try {
-        var template = require('room.default');
+        template = require('room.default');
       } catch (e) {
         template = false;
       }
