@@ -33,6 +33,7 @@ Object.assign(component, {
       }
 
       // When done upgrading, switch to harvesting
+      var targets = [];
       if (cMemory.activity == 'unloading') {
         // when not empty, transfer energy to target
         if (creep.carry.energy != 0) {
@@ -44,7 +45,7 @@ Object.assign(component, {
             STRUCTURE_SPAWN
           ];
 
-          var targets = [];
+          var i, j;
           for (i in structuresPriority) {
             var targetsOfOneType = creep.room.find(FIND_MY_STRUCTURES, {
               filter: function (structure) {
@@ -81,20 +82,20 @@ Object.assign(component, {
           if (!cMemory.buildMode) {
             cMemory.buildMode = creep.memory.buildMode = _.random(1, 2); // 1 = build, 2 = repair
             switch (cMemory.buildMode) {
-              case 1:
-                creep.say('Build!');
-                break;
-              case 2:
-                creep.say('Repair!');
-                break;
-              default:
-                creep.say('Huh?!');
-                break;
+            case 1:
+              creep.say('Build!');
+              break;
+            case 2:
+              creep.say('Repair!');
+              break;
+            default:
+              creep.say('Huh?!');
+              break;
             }
           }
           // build
           if (cMemory.buildMode == 1) {
-            var targets = creep.room.find(FIND_MY_CONSTRUCTION_SITES);
+            targets = creep.room.find(FIND_MY_CONSTRUCTION_SITES);
             if (targets.length > 0) {
               if (creep.build(targets[0]) == ERR_NOT_IN_RANGE) {
                 creep.moveTo(targets[0]);
@@ -113,15 +114,12 @@ Object.assign(component, {
           }
           // repair
           if (cMemory.buildMode == 2) {
-            console.log('buildmode repair');
-            var targets = creep.room.find(FIND_MY_STRUCTURES, {
+            targets = creep.room.find(FIND_MY_STRUCTURES, {
               filter: function (structure) {
                 return (structure.hits < structure.hitsMax);
               }
             });
-            console.log('repair targets: ' + targets);
             if (targets.length) {
-              console.log(targets[0].name);
               if (creep.repair(targets[0]) == ERR_NOT_IN_RANGE) {
                 creep.moveTo(targets[0]);
                 this.saveState(creep, cMemory);
@@ -151,5 +149,5 @@ Object.assign(component, {
     }
 
   }
-  
+
 });
