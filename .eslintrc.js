@@ -100,6 +100,6 @@ module.exports = {
       "TOP_LEFT": true,
       "ERR_NOT_IN_RANGE": true,
       "_": true,
-      "component": true
+      "component": {}
     }
 };
