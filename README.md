@@ -26,10 +26,23 @@ _**Note:** If you log in through Steam or Github, you can still set your Screeps
 
 * Windows
 
+Set Environment Variables in of of the two ways below
+
+for this session (CMD Environment Variables):
+
 ```
-set EMAIL=your@email.com
-set PASSWORD=YOURAWESOMEPASSWORD000!!!
+set EMAIL=your_email@example.com
+set PASSWORD=yourpassword
 ```
+
+or permanently (System Environment Variables):
+
+```
+setx EMAIL your_email@example.com
+setx PASSWORD yourpassword
+```
+
+**Note:** _the latter will expose these variables on your system, for anyone to see and will require you to restart your terminal to take effect._
 
 * Linux / Mac OS X
 

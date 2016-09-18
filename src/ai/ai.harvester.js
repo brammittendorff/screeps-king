@@ -13,6 +13,7 @@ Object.assign(component, {
         cMemory.activity = 'harvesting';
         cMemory.targetSourceId = global.resourceSelector.selectClosestTo(creep);
         cMemory.initiated = true;
+        this.saveState(creep, cMemory);
         creep.say('Work Work!');
       }
 
