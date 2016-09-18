@@ -47,29 +47,9 @@ export SCREEPS_PASSWORD=yourpassword
 
 You are now done installing.
 
-## Optional
-
-_**Optionally** we can run bower install to install a third party library, for IDE referencing of in-game functions._
-
-```
-bower install
-```
-
 ## Syncing files
 
-Before push our files to the game, we need to first compile our files to dist.
-
-```
-grunt concat
-```
-
-After that we can push our files
-
-```
-grunt screeps
-```
-
-Or the shorthand version of both actions
+Use the following command
 
 ```
 grunt sync
@@ -83,4 +63,12 @@ and sync the dist folder with your game.
 
 ```
 grunt watch
+```
+
+## Optional
+
+_**Optionally** we can run bower install to install a third party library, for IDE referencing of in-game functions._
+
+```
+bower install
 ```
