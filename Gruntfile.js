@@ -26,7 +26,7 @@ module.exports = function(grunt) {
       }
     },
     eslint: {
-      target: 'dist/*.js'
+      target: ['dist/*.js', 'src/*/*.js']
     },
     screeps: {
       options: {
