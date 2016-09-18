@@ -5,7 +5,6 @@ module.exports = {
 
     // go through all creeps in object
     for (var c in creeps) {
-
       // vars
       var creep = creeps[c];
       var role = creep.memory.role;
@@ -17,8 +16,8 @@ module.exports = {
 
       // load tasker for this creep, according to his role
       try {
-      } catch (e) {
         var creepTasker = require('creep.' + role);
+      } catch (e) {
         creepTasker = false;
       }
 
