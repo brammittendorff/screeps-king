@@ -28,6 +28,7 @@ Object.assign(component, {
           }
         } else {
           cMemory.activity = 'unloading';
+          this.saveState(creep, cMemory);
           creep.say('Unloading!');
         }
       }
@@ -92,6 +93,7 @@ Object.assign(component, {
               creep.say('Huh?!');
               break;
             }
+            console.log(cMemory.buildMode);
           }
           // build
           if (cMemory.buildMode == 1) {
