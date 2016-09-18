@@ -25,8 +25,8 @@ Object.assign(component, {
 
         // attack enemy military structures //STRUCTURE_TOWER
         targets = room.find(FIND_HOSTILE_STRUCTURES, {
-                filter: {structureType: STRUCTURE_TOWER}
-              });
+          filter: {structureType: STRUCTURE_TOWER}
+        });
         if (targets.length) {
           this.attackClosestTarget(entity, targets);
         }
@@ -63,10 +63,10 @@ Object.assign(component, {
         }
 
         targets = room.find(FIND_MY_STRUCTURES, {
-                filter: {
-                  structureType: STRUCTURE_TOWER
-                }
-              });
+          filter: {
+            structureType: STRUCTURE_TOWER
+          }
+        });
         if (targets.length) {
           this.repairClosestTarget(entity, targets);
         }
@@ -83,10 +83,10 @@ Object.assign(component, {
 
         // heal friendly non-essential buildings
         targets = room.find(FIND_MY_STRUCTURES, {
-                filter: {
-                  structureType: STRUCTURE_TOWER
-                }
-              });
+          filter: {
+            structureType: STRUCTURE_TOWER
+          }
+        });
         if (targets.length) {
           this.repairClosestTarget(entity, targets);
         }
@@ -121,8 +121,8 @@ Object.assign(component, {
     repairClosestTarget: function(entity, targets) {
       var repairCode = entity.repair(entity.pos.findClosestByRange(targets));
       if (repairCode != 0) {
-        console.log('Repair failed with code: (' + repairCode + ').');
-      };
+        // Repair failed
+      }
     }
 
   }
