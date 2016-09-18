@@ -6,6 +6,9 @@ module.exports = function(grunt) {
   grunt.loadNpmTasks('grunt-contrib-concat');
   grunt.loadNpmTasks('grunt-eslint');
 
+  // unix LF
+  grunt.util.linefeed = '\n';
+
   // grunt init config
   grunt.initConfig({
     concat: {
