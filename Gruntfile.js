@@ -4,6 +4,7 @@ module.exports = function(grunt) {
   grunt.loadNpmTasks('grunt-screeps');
   grunt.loadNpmTasks('grunt-contrib-watch');
   grunt.loadNpmTasks('grunt-contrib-concat');
+  grunt.loadNpmTasks('grunt-eslint');
 
   // grunt init config
   grunt.initConfig({
@@ -21,10 +22,13 @@ module.exports = function(grunt) {
         dest: 'dist/templates.js'
       }
     },
+    eslint: {
+      target: 'dist/*.js'
+    },
     screeps: {
       options: {
-        email: process.env.EMAIL,
-        password: process.env.PASSWORD,
+        email: process.env.SCREEPS_EMAIL,
+        password: process.env.SCREEPS_PASSWORD,
         branch: 'my-screeps'
       },
       dist: {
@@ -34,7 +38,7 @@ module.exports = function(grunt) {
     watch: {
       scripts: {
         files: ['src/*/*.js'],
-        tasks: ['concat', 'screeps'],
+        tasks: ['concat', 'screeps', 'eslint'],
         options: {
           interrupt: false
         }
@@ -43,7 +47,7 @@ module.exports = function(grunt) {
   });
 
   // register tasks
-  grunt.registerTask('default', ['concat', 'screeps']);
-  grunt.registerTask('sync', ['concat', 'screeps']);
+  grunt.registerTask('default', ['concat', 'screeps', 'eslint']);
+  grunt.registerTask('sync', ['concat', 'screeps', 'eslint']);
 
 };

@@ -5,13 +5,13 @@ module.exports = {
     // Tell user we're analyzing the room
 
     // Determine points of interest
-    var POIs = this.pois(room);
+    // var POIs = this.pois(room);
 
     // Determine space around points of interest
-    var workingSpace = this.spaceInRoom(POIs, room);
+    // var workingSpace = this.spaceInRoom(POIs, room);
 
     // Determine roads between points of interest, avoiding workingspace
-    var roadsSpace = this.spaceRoadsInRoom(POIs, workingSpace, room);
+    // var roadsSpace = this.spaceRoadsInRoom(POIs, workingSpace, room);
 
   },
 
@@ -43,9 +43,12 @@ module.exports = {
 
   spaceInRoom: function(locationArray, room) {
     var workingSpace = [];
+    var i = null;
     for (i in locationArray) {
       var locationObject = locationArray[i];
+      var x = null;
       for (x = -1; x <= 1; x++) {
+        var y = null;
         for (y = -1; y <= 1; y++) {
           if (!(x == 0 && y == 0)) {
             workingSpace.push(
