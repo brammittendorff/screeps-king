@@ -22,7 +22,7 @@ _**Note:** If you log in through Steam or Github, you can still set your Screeps
 
 Set Environment Variables in of of the two ways below
 
-##### 1 only for the current CMD session (CMD Environment Variables):
+##### 1 Only for the current CMD session (CMD Environment Variables):
 
 ```
 set SCREEPS_EMAIL=your_email@example.com
