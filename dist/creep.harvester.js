@@ -35,13 +35,27 @@ module.exports = {
         if(creep.memory.activity == 'unloading') {
             // when not empty, transfer energy to target
             if(creep.carry.energy != 0) {
-                // select targets in order
-                var targets = creep.room.find(FIND_MY_STRUCTURES, { filter: (structure) => { return (
-                    structure.structureType == STRUCTURE_TOWER || // always tower first
-                    structure.structureType == STRUCTURE_EXTENSION ||
-                    structure.structureType == STRUCTURE_SPAWN ) &&
-                    structure.energy < structure.energyCapacity
-                }});
+
+                // priority order
+                var structuresPriority = [
+                    STRUCTURE_TOWER,
+                    STRUCTURE_EXTENSION,
+                    STRUCTURE_SPAWN
+                ];
+
+                // select targets in order // todo: add structures per type in room object (maybe not even per tick but per event update their state)
+                var targets = [];
+                for (i in structuresPriority) {
+                    var targetsOfOneType = creep.room.find(FIND_MY_STRUCTURES, {
+                        filter: function (structure) {
+                            return (structure.energy < structure.energyCapacity) && (structure.structureType == structuresPriority[i]);
+                        }
+                    });
+                    for (j in targetsOfOneType) {
+                        targets.push(targetsOfOneType[j]);
+                    }
+                }
+
                 // transfer energy to first selected target (because they are in priority order)
                 if(targets.length > 0) {
                     if(creep.transfer(targets[0], RESOURCE_ENERGY) == ERR_NOT_IN_RANGE) {
@@ -81,7 +95,7 @@ module.exports = {
                         }
                     } else {
                         // create new building if needed
-                        console.log('Harvester: trying to create new structure');
+                        console.log('[' + creep.room.name + '] Build Queue is empty! todo=autobuild');
                         buildingTemplate.build(creep.room);
 
                         // todo: need a good way to handle building, otherwise go back to harvesting
@@ -93,7 +107,11 @@ module.exports = {
                 }
                 // repair
                 if(creep.memory.buildMode == 2) {
-                    var targets = creep.room.find(FIND_MY_STRUCTURES, { filter: (structure) => { return ( structure.hits < structure.hitsMax ) }});
+                    var targets = creep.room.find(FIND_MY_STRUCTURES, {
+                        filter: function(structure) {
+                            return ( structure.hits < structure.hitsMax )
+                        }
+                    });
                     if(targets.length > 0) {
                         console.log(targets[0].name);
                         if(creep.repair(targets[0]) == ERR_NOT_IN_RANGE) {
