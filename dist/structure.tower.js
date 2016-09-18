@@ -119,8 +119,9 @@ module.exports = {
     },
 
     repairClosestTarget: function(entity, targets) {
-        var target = entity.pos.findClosestByRange(targets);
-        var repairCode =  entity.repair(Game.getObjectById(target.id));
+        var repairCode = entity.repair(targets[0]);
+        //var target = entity.pos.findClosestByRange(targets);
+        //var repairCode =  entity.repair(Game.getObjectById(target.id));
         if(repairCode != 0) {
             console.log('Repair failed with code: (' + repairCode + ').');
         };

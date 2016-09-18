@@ -111,11 +111,11 @@ module.exports = {
                 }
                 var avaialableSpawn = go.findAvailableSpawnInRoom(room);
                 if( avaialableSpawn.canCreateCreep(blueprint.body, blueprint.name, blueprint.memory) == 0 ) {
-                    console.log('STAGE 1: Creating 550 or 800 harvester (' + (room.harvesters+1) + '/' + amount + ').');
+                    console.log('[' + room.name + '] STAGE 1: Creating 550 or 800 harvester (' + (room.harvesters+1) + '/' + amount + ').');
                     avaialableSpawn.createCreep(blueprint.body, blueprint.name, blueprint.memory);
                     return;
                 }
-                console.log('STAGE 1: Unable to create ' + amount + ' harvester.');
+                console.log('[' + room.name + '] STAGE 1: Unable to create ' + amount + ' harvester.');
                 return;
             }
 
@@ -132,11 +132,11 @@ module.exports = {
                 }
                 var avaialableSpawn = go.findAvailableSpawnInRoom(room);
                 if( avaialableSpawn.canCreateCreep(blueprint.body, blueprint.name, blueprint.memory) == 0 ) {
-                    console.log('STAGE 1: Creating 550 upgrader (' + (room.upgraders+1) + '/' + amount + ').');
+                    console.log('[' + room.name + '] 1: Creating 550 or 800 upgrader (' + (room.upgraders+1) + '/' + amount + ').');
                     avaialableSpawn.createCreep(blueprint.body, blueprint.name, blueprint.memory);
                     return;
                 }
-                console.log('STAGE 1: Unable to create one of first ' + amount + ' upgraders.');
+                console.log('[' + room.name + '] STAGE 1: Unable to create ' + amount + ' upgraders.');
                 return;
             }
 
