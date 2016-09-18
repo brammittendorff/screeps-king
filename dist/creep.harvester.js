@@ -95,7 +95,7 @@ module.exports = {
                         }
                     } else {
                         // create new building if needed
-                        console.log('Harvester: trying to create new structure');
+                        console.log('[' + creep.room.name + '] Build Queue is empty! todo=autobuild');
                         buildingTemplate.build(creep.room);
 
                         // todo: need a good way to handle building, otherwise go back to harvesting

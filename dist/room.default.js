@@ -13,6 +13,23 @@ module.exports = {
         var creeps = room.find(FIND_MY_CREEPS);
         go.taskCreepsByTheirRoles(creeps);
 
+        // task towers
+        var towers = room.find(FIND_MY_STRUCTURES, { filter:
+            function(structure) {
+                return structure.structureType == STRUCTURE_TOWER;
+            }
+        });
+        try {
+            var towerTasker = require('structure.tower');
+        } catch (e) {
+            console.log('[Roomcontroller] Error: Unable to load tower routine');
+        }
+        if(towerTasker) {
+            for(i in towers) {
+                towerTasker.routine(towers[i]);
+            }
+        }
+
         /**
          * Conditional proceedings
          *
@@ -31,7 +48,7 @@ module.exports = {
 
             // advance to next room?
             if(room.energyCapacityAvailable >= 550) {
-                console.log('STAGE 0: Advancing to STAGE 1...');
+                console.log('[' + room.name + '] STAGE 0: Advancing to STAGE 1...');
                 room.memory.stage = 1;
                 return;
             }
@@ -47,11 +64,11 @@ module.exports = {
                 var blueprint = require('z.300harvester');
                 var avaialableSpawn = go.findAvailableSpawnInRoom(room);
                 if( avaialableSpawn.canCreateCreep(blueprint.body, blueprint.name, blueprint.memory) == 0 ) {
-                    console.log('STAGE 0: Creating initial harvesters (' + (room.harvesters+1) + '/' + amount + ').');
+                    console.log('[' + room.name + '] STAGE 0: Creating initial harvesters (' + (room.harvesters+1) + '/' + amount + ').');
                     avaialableSpawn.createCreep(blueprint.body, blueprint.name, blueprint.memory);
                     return;
                 }
-                console.log('STAGE 0: Unable to create one of first ' + amount + ' harvesters.');
+                console.log('[' + room.name + '] STAGE 0: Unable to create one of first ' + amount + ' harvesters.');
                 return;
             }
 
@@ -61,11 +78,11 @@ module.exports = {
                 var blueprint = require('z.300upgrader');
                 var avaialableSpawn = go.findAvailableSpawnInRoom(room);
                 if( avaialableSpawn.canCreateCreep(blueprint.body, blueprint.name, blueprint.memory) == 0 ) {
-                    console.log('STAGE 0: Creating initial upgraders (' + (room.upgraders+1) + '/' + amount + ').');
+                    console.log('[' + room.name + '] STAGE 0: Creating initial upgraders (' + (room.upgraders+1) + '/' + amount + ').');
                     avaialableSpawn.createCreep(blueprint.body, blueprint.name, blueprint.memory);
                     return;
                 }
-                console.log('STAGE 0: Unable to create one of first ' + amount + ' upgraders.');
+                console.log('[' + room.name + '] STAGE 0: Unable to create one of first ' + amount + ' upgraders.');
                 return;
             }
 
@@ -82,23 +99,37 @@ module.exports = {
             }
 
             // create <amount> bigger harvesters
-            var amount = 3; // no more than spaces for resource closest tot spawn
+            var amount = 4; // no more than spaces for resource closest tot spawn
             if(room.harvesters < amount) {
-                var blueprint = require('z.550harvester');
+                if(room.energyCapacityAvailable >= 800) {
+                    if(room.energyAvailable < 800) {
+                      return;
+                    }
+                    var blueprint = require('z.800harvester');
+                } else {
+                    var blueprint = require('z.550harvester');
+                }
                 var avaialableSpawn = go.findAvailableSpawnInRoom(room);
                 if( avaialableSpawn.canCreateCreep(blueprint.body, blueprint.name, blueprint.memory) == 0 ) {
-                    console.log('STAGE 1: Creating 550 harvester (' + (room.harvesters+1) + '/' + amount + ').');
+                    console.log('STAGE 1: Creating 550 or 800 harvester (' + (room.harvesters+1) + '/' + amount + ').');
                     avaialableSpawn.createCreep(blueprint.body, blueprint.name, blueprint.memory);
                     return;
                 }
-                console.log('STAGE 1: Unable to create one of first ' + amount + ' harvesters.');
+                console.log('STAGE 1: Unable to create ' + amount + ' harvester.');
                 return;
             }
 
             // create <amount> bigger upgraders
-            amount = 4;
+            amount = 5;
             if(room.upgraders < amount) {
-                var blueprint = require('z.550upgrader');
+                if(room.energyCapacityAvailable >= 800) {
+                    if(room.energyAvailable < 800) {
+                        return;
+                    }
+                    var blueprint = require('z.800upgrader');
+                } else {
+                    var blueprint = require('z.550upgrader');
+                }
                 var avaialableSpawn = go.findAvailableSpawnInRoom(room);
                 if( avaialableSpawn.canCreateCreep(blueprint.body, blueprint.name, blueprint.memory) == 0 ) {
                     console.log('STAGE 1: Creating 550 upgrader (' + (room.upgraders+1) + '/' + amount + ').');
