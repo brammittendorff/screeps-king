@@ -2,7 +2,6 @@ var resourceSelector = require('select.resource');
 
 module.exports = {
 
-  /** @param {Creep} creep **/
   task: function(creep) {
 
     //vars
@@ -37,17 +36,18 @@ module.exports = {
       if (creep.carry.energy != 0) {
 
         // priority order
-        var sPriority = [
+        var structuresPriority = [
             STRUCTURE_TOWER,
             STRUCTURE_EXTENSION,
             STRUCTURE_SPAWN
         ];
 
         var targets = [];
-        for (i in sPriority) {
+        for (i in structuresPriority) {
           var targetsOfOneType = creep.room.find(FIND_MY_STRUCTURES, {
-            filter: function(s) {
-              return (s.energy < s.energyCapacity) && (s.sType == sPriority[i]);
+            filter: function(structure) {
+              return (structure.energy < structure.energyCapacity) &&
+              (structure.structureType == structuresPriority[i]);
             }
           });
           for (j in targetsOfOneType) {
@@ -55,6 +55,7 @@ module.exports = {
           }
         }
 
+        // transfer energy to first selected target (because they are in priority order)
         if (targets.length > 0) {
           if (creep.transfer(targets[0], RESOURCE_ENERGY) == ERR_NOT_IN_RANGE) {
             creep.moveTo(targets[0]);
@@ -92,8 +93,8 @@ module.exports = {
               return;
             }
           } else {
-            // create new building if needed
             buildingTemplate.build(creep.room);
+            // create new building if needed
 
             //if(creep.carry.energy < creep.carryCapacity) {
             cMemory.activity = 'harvesting';
@@ -103,12 +104,15 @@ module.exports = {
         }
         // repair
         if (cMemory.buildMode == 2) {
+          console.log('buildmode repair');
           var targets = creep.room.find(FIND_MY_STRUCTURES, {
-            filter: function(s) {
-              return (s.hits < s.hitsMax);
+            filter: function(structure) {
+              return (structure.hits < structure.hitsMax);
             }
           });
-          if (targets.length > 0) {
+          console.log('repair targets: ' + targets);
+          if (targets.length) {
+            console.log(targets[0].name);
             if (creep.repair(targets[0]) == ERR_NOT_IN_RANGE) {
               creep.moveTo(targets[0]);
               return;

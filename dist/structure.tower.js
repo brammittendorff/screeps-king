@@ -21,12 +21,10 @@ module.exports = {
         this.attackClosestTarget(entity, targets);
       }
 
-      // attack enemy military ss //STRUCTURE_TOWER
-      targets = room.find(FIND_HOSTILE_STRUCTURES,
-        {
-          filter: {sType: STRUCTURE_TOWER}
-        }
-      );
+      // attack enemy military structures //STRUCTURE_TOWER
+      targets = room.find(FIND_HOSTILE_STRUCTURES, {
+              filter: {structureType: STRUCTURE_TOWER}
+            });
       if (targets.length) {
         this.attackClosestTarget(entity, targets);
       }
@@ -35,6 +33,7 @@ module.exports = {
 
     if (entity.energy > entity.energyCapacity / 4) {
 
+      // attack hostile construction sites //FIND_HOSTILE_CONSTRUCTION_SITES
       targets = room.find(FIND_HOSTILE_CONSTRUCTION_SITES);
       if (targets.length) {
         this.attackClosestTarget(entity, targets);
@@ -49,7 +48,7 @@ module.exports = {
 
     if (entity.energy > entity.energyCapacity / 2) {
 
-      // attack enemy primary ss //STRUCTURE_TOWER
+      // attack enemy primary structures //STRUCTURE_TOWER
       targets = room.find(FIND_HOSTILE_SPAWNS);
       if (targets.length) {
         this.attackClosestTarget(entity, targets);
@@ -61,11 +60,11 @@ module.exports = {
         this.attackClosestTarget(entity, targets);
       }
 
-      targets = room.find(FIND_MY_STRUCTURES,
-        {
-          filter: {sType: STRUCTURE_TOWER}
-        }
-      );
+      targets = room.find(FIND_MY_STRUCTURES, {
+              filter: {
+                structureType: STRUCTURE_TOWER
+              }
+            });
       if (targets.length) {
         this.repairClosestTarget(entity, targets);
       }
@@ -81,20 +80,11 @@ module.exports = {
       }
 
       // heal friendly non-essential buildings
-      targets = room.find(FIND_MY_STRUCTURES,
-        {
-          filter: {sType: STRUCTURE_TOWER}
-        }
-      );
-      if (targets.length) {
-        this.repairClosestTarget(entity, targets);
-      }
-
-      targets = room.find(FIND_STRUCTURES, {
-        filter: function(s) {
-          return s.hits < s.hitsMax && s.sType != STRUCTURE_WALL;
-        }
-      });
+      targets = room.find(FIND_MY_STRUCTURES, {
+              filter: {
+                structureType: STRUCTURE_TOWER
+              }
+            });
       if (targets.length) {
         this.repairClosestTarget(entity, targets);
       }
@@ -103,22 +93,22 @@ module.exports = {
 
     if (entity.energy >= (entity.energyCapacity - 100)) {
 
-      // generate walls using heal
       targets = room.find(FIND_STRUCTURES, {
-        filter: function(s) {
-          return s.hits < s.hitsMax;
+        filter: function(structure) {
+          return structure.hits < structure.hitsMax;
         }
       });
       if (targets.length) {
         this.repairClosestTarget(entity, targets);
       }
+
     }
 
   },
 
   attackClosestTarget: function(entity, targets) {
     var target = entity.pos.findClosestByRange(targets);
-    entity.attack(target);
+    entity.rangedAttack(target);
   },
 
   healClosestTarget: function(entity, targets) {
@@ -127,11 +117,9 @@ module.exports = {
   },
 
   repairClosestTarget: function(entity, targets) {
-    var repairCode = entity.repair(targets[0]);
-    //var target = entity.pos.findClosestByRange(targets);
-    //var repairCode =  entity.repair(Game.getObjectById(target.id));
+    var repairCode = entity.repair(entity.pos.findClosestByRange(targets));
     if (repairCode != 0) {
-      // Repair failed
+      console.log('Repair failed with code: (' + repairCode + ').');
     };
   }
 
