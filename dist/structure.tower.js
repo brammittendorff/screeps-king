@@ -81,36 +81,27 @@ module.exports = {
                 this.repairClosestTarget(entity, targets);
             }
 
-            // heal roads or any kind that is damaged // todo, filter better, more
-            targets = room.find(FIND_STRUCTURES, {
-                filter: function(structure) {
-                    return structure.hits < structure.hitsMax && structure.structureType != STRUCTURE_WALL
-                }
-            });
-            if(targets.length) {
-                this.repairClosestTarget(entity, targets);
-            }
-
         }
 
         if( entity.energy >= (entity.energyCapacity-100) ) {
 
-            // generate walls using heal
+            // heal roads or any kind that is damaged // todo, filter better, more
             targets = room.find(FIND_STRUCTURES, {
                 filter: function(structure) {
-                    return structure.hits < structure.hitsMax;
+                    return structure.hits < structure.hitsMax
                 }
             });
             if(targets.length) {
                 this.repairClosestTarget(entity, targets);
             }
+
         }
 
     },
 
     attackClosestTarget: function(entity, targets) {
         var target = entity.pos.findClosestByRange(targets);
-        entity.attack(target);
+        entity.rangedAttack(target);
     },
 
     healClosestTarget: function(entity, targets) {
@@ -119,9 +110,7 @@ module.exports = {
     },
 
     repairClosestTarget: function(entity, targets) {
-        var repairCode = entity.repair(targets[0]);
-        //var target = entity.pos.findClosestByRange(targets);
-        //var repairCode =  entity.repair(Game.getObjectById(target.id));
+        var repairCode = entity.repair(entity.pos.findClosestByRange(targets));
         if(repairCode != 0) {
             console.log('Repair failed with code: (' + repairCode + ').');
         };

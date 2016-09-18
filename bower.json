@@ -1,0 +1,22 @@
+{
+  "name": "my-screeps",
+  "homepage": "https://github.com/brammittendorff/my-screeps",
+  "authors": [
+    "webber <webber.nl@gmail.com>",
+    "bram <>"
+  ],
+  "description": "",
+  "main": "",
+  "license": "MIT",
+  "private": true,
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "test",
+    "tests"
+  ],
+  "devDependencies": {
+    "estelsmith-screeps-api": "^0.0.1"
+  }
+}

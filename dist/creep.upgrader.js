@@ -15,30 +15,41 @@ module.exports = {
 
         // When full, change this creeps harvesting spot and switch to upgrading
         if(creep.memory.activity == 'harvesting') {
-            if(creep.carryCapacity != creep.carry.energy) {
-                var targetSource = Game.getObjectById(creep.memory.targetSourceId);
-                if(creep.harvest(targetSource) == ERR_NOT_IN_RANGE) {
-                    creep.moveTo(targetSource);
-                }
-            } else {
-                creep.memory.activity = 'upgrading';
-                creep.say('Upgrading!');
-            }
+            this.harvest(creep);
         }
 
         // When done upgrading, switch to harvesting
         if(creep.memory.activity == 'upgrading') {
-            var controller = creep.room.controller;
-            if(creep.carry.energy != 0) {
-                if(creep.upgradeController(controller) == ERR_NOT_IN_RANGE) {
-                    creep.moveTo(controller);
-                }
-            } else {
-                creep.memory.activity = 'harvesting';
-                creep.say('Crystals!');
-            }
+            this.upgrade(creep);
         }
 
+    },
+
+    harvest: function(creep) {
+        if(creep.carryCapacity > creep.carry.energy) {
+            var targetSource = Game.getObjectById(creep.memory.targetSourceId);
+            if(creep.harvest(targetSource) == ERR_NOT_IN_RANGE) {
+                creep.moveTo(targetSource);
+            }
+        } else {
+            creep.memory.activity = 'upgrading';
+            creep.say('Upgrading!');
+            this.upgrade(creep);
+        }
+
+    },
+
+    upgrade: function(creep) {
+        var controller = creep.room.controller;
+        if(creep.carry.energy != 0) {
+            if(creep.upgradeController(controller) == ERR_NOT_IN_RANGE) {
+                creep.moveTo(controller, {});
+            }
+        } else {
+            creep.memory.activity = 'harvesting';
+            creep.say('Crystals!');
+            this.harvest(creep);
+        }
     }
 
 };
