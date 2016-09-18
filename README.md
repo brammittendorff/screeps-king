@@ -55,7 +55,7 @@ Use the following command
 grunt sync
 ```
 
-## Auto-sync
+## Auto-syncing files
 
 Should you wish to auto-sync any save directly to the game, this is possible using grunt-contrib-watch.
 Once entering the below command, grunt will watch for any changes, then regenerate the `/dist`-folder
@@ -63,12 +63,4 @@ and sync the dist folder with your game.
 
 ```
 grunt watch
-```
-
-## Optional
-
-_**Optionally** we can run bower install to install a third party library, for IDE referencing of in-game functions._
-
-```
-bower install
 ```
