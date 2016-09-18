@@ -113,16 +113,26 @@ module.exports = {
       return;
     }
 
+    var bp;
     // create <amount> bigger harvesters
     var amount = 4; // no more than spaces for resource closest tot spawn
     if (room.harvesters < amount) {
+      if(room.harvesters < 1) {
+        // todo: remove this failover using a better function
+        var bp = global.templates['_300harvester'];
+        var spawn = go.findAvailableSpawnInRoom(room);
+        if (spawn.canCreateCreep(bp.body, bp.name, bp.memory) == 0) {
+          spawn.createCreep(bp.body, bp.name, bp.memory);
+          return;
+        }
+      }
       if (room.energyCapacityAvailable >= 800) {
         if (room.energyAvailable < 800) {
           return;
         }
-        var bp = global.templates['_800harvester'];
+        bp = global.templates['_800harvester'];
       } else {
-        var bp = global.templates['_550harvester'];
+        bp = global.templates['_550harvester'];
       }
       var spawn = go.findAvailableSpawnInRoom(room);
       if (spawn.canCreateCreep(bp.body, bp.name, bp.memory) == 0) {
@@ -139,10 +149,12 @@ module.exports = {
         if (room.energyAvailable < 800) {
           return;
         }
-        var bp = global.templates['_800upgrader'];
+        bp = global.templates['_800upgrader'];
       } else {
-        var bp = global.templates['_550upgrader'];
+        bp = global.templates['_550upgrader'];
       }
+      console.log(bp);
+      console.log(JSON.stringify(bp));
       var spawn = go.findAvailableSpawnInRoom(room);
       if (spawn.canCreateCreep(bp.body, bp.name, bp.memory) == 0) {
         spawn.createCreep(bp.body, bp.name, bp.memory);
