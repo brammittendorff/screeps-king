@@ -41,7 +41,7 @@ module.exports = function(grunt) {
     watch: {
       scripts: {
         files: ['src/*/*.js'],
-        tasks: ['concat', 'screeps', 'eslint'],
+        tasks: ['eslint', 'concat', 'screeps'],
         options: {
           interrupt: false
         }
@@ -50,7 +50,7 @@ module.exports = function(grunt) {
   });
 
   // register tasks
-  grunt.registerTask('default', ['concat', 'screeps', 'eslint']);
-  grunt.registerTask('sync', ['concat', 'screeps', 'eslint']);
+  grunt.registerTask('default', ['eslint', 'concat', 'screeps']);
+  grunt.registerTask('sync', ['eslint', 'concat', 'screeps']);
 
 };
