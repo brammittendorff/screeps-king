@@ -14,11 +14,12 @@ module.exports = {
 
     //vars
     var i;
+    var ai;
     var rMemory = room.memory;
 
     // task creeps
     var creeps = room.find(FIND_MY_CREEPS);
-    for (var i in creeps) {
+    for (i in creeps) {
       var creep = creeps[i];
       var cMemory = creep.memory;
       if (cMemory.role === undefined) {
@@ -63,7 +64,7 @@ module.exports = {
      */
 
     if (rMemory.stage == 1) {
-      this.stage1(room, rMemory);
+      this.stage1(room);
       return;
     }
 
@@ -74,7 +75,7 @@ module.exports = {
     // advance to next room?
     if (room.energyCapacityAvailable >= 550) {
       rMemory.stage = room.memory.stage = 1;
-      this.stage1(room, rMemory);
+      this.stage1(room);
     }
 
     // check if enough energy
@@ -95,10 +96,10 @@ module.exports = {
     }
 
     // create first <amount> upgraders
-    var amount = 5;
+    amount = 5;
     if (room.upgraders < amount) {
-      var bp = global.templates['_300upgrader'];
-      var spawn = go.findAvailableSpawnInRoom(room);
+      bp = global.templates['_300upgrader'];
+      spawn = go.findAvailableSpawnInRoom(room);
       if (spawn.canCreateCreep(bp.body, bp.name, bp.memory) == 0) {
         spawn.createCreep(bp.body, bp.name, bp.memory);
         return;
@@ -108,23 +109,25 @@ module.exports = {
 
   },
 
-  stage1: function(room, rMemory) {
+  stage1: function(room) {
     if (room.energyAvailable < 550) {
       return;
     }
 
     // create <amount> bigger harvesters
     var amount = 4; // no more than spaces for resource closest tot spawn
+    var bp;
+    var spawn;
     if (room.harvesters < amount) {
       if (room.energyCapacityAvailable >= 800) {
         if (room.energyAvailable < 800) {
           return;
         }
-        var bp = global.templates['_800harvester'];
+        bp = global.templates['_800harvester'];
       } else {
-        var bp = global.templates['_550harvester'];
+        bp = global.templates['_550harvester'];
       }
-      var spawn = go.findAvailableSpawnInRoom(room);
+      spawn = go.findAvailableSpawnInRoom(room);
       if (spawn.canCreateCreep(bp.body, bp.name, bp.memory) == 0) {
         spawn.createCreep(bp.body, bp.name, bp.memory);
         return;
@@ -139,11 +142,11 @@ module.exports = {
         if (room.energyAvailable < 800) {
           return;
         }
-        var bp = global.templates['_800upgrader'];
+        bp = global.templates['_800upgrader'];
       } else {
-        var bp = global.templates['_550upgrader'];
+        bp = global.templates['_550upgrader'];
       }
-      var spawn = go.findAvailableSpawnInRoom(room);
+      spawn = go.findAvailableSpawnInRoom(room);
       if (spawn.canCreateCreep(bp.body, bp.name, bp.memory) == 0) {
         spawn.createCreep(bp.body, bp.name, bp.memory);
         return;
