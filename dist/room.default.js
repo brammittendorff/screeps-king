@@ -6,13 +6,13 @@ global.resourceSelector = require('select.resource');
 
 module.exports = {
 
-  execute: function(room) {
+  execute: function (room) {
 
     /**
      * Every tick
      */
 
-    //vars
+      //vars
     var i;
     var rMemory = room.memory;
 
@@ -24,14 +24,14 @@ module.exports = {
       if (cMemory.role === undefined) {
         cMemory.role = creep.memory.role = 'harvester';
       }
-      if(ai[cMemory.role]) {
+      if (ai[cMemory.role]) {
         ai[cMemory.role].task(creep);
       }
     }
 
     // task towers
     var towers = room.find(FIND_MY_STRUCTURES, {
-      filter: function(structure) {
+      filter: function (structure) {
         return structure.structureType == STRUCTURE_TOWER;
       }
     });
@@ -69,7 +69,7 @@ module.exports = {
 
   },
 
-  stage0: function(room, rMemory) {
+  stage0: function (room, rMemory) {
 
     // advance to next room?
     if (room.energyCapacityAvailable >= 550) {
@@ -108,7 +108,7 @@ module.exports = {
 
   },
 
-  stage1: function(room) {
+  stage1: function (room) {
     if (room.energyAvailable < 550) {
       return;
     }
@@ -118,7 +118,7 @@ module.exports = {
     var bp;
     var spawn;
     if (room.harvesters < amount) {
-      if(room.harvesters < 1) {
+      if (room.harvesters < 1) {
         // todo: remove this failover using a better function
         var bp = global.templates['_300harvester'];
         var spawn = go.findAvailableSpawnInRoom(room);
