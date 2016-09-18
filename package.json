@@ -4,10 +4,12 @@
   "description": "A screeps repository",
   "main": "Gruntfile.js",
   "dependencies": {
+    "bower": "^1.7.9",
+    "eslint": "^3.5.0",
     "grunt": "^1.0.1",
+    "grunt-contrib-watch": "^1.0.0",
     "grunt-env": "^0.4.4",
-    "grunt-screeps": "^1.2.1",
-    "eslint": "^3.5.0"
+    "grunt-screeps": "^1.2.1"
   },
   "devDependencies": {},
   "scripts": {

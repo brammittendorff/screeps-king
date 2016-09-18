@@ -8,10 +8,10 @@ First we need grunt
 npm install -g grunt
 ```
 
-After that we will need grunt-screeps
+After that we will need all npm packages so run
 
 ```
-npm install grunt-screeps
+npm install
 ```
 
 Then we need to set the enviroment variables
