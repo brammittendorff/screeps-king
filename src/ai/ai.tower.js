@@ -8,8 +8,10 @@ Object.assign(component, {
 
     routine: function(entity) {
 
-      var targets = entity.room;
-      var room = targets;
+      var targets = {};
+      var room = entity.room;
+
+
 
       /**
        * priority order
@@ -21,6 +23,7 @@ Object.assign(component, {
         targets = room.find(FIND_HOSTILE_CREEPS);
         if (targets.length) {
           this.attackClosestTarget(entity, targets);
+          return;
         }
 
         // attack enemy military structures //STRUCTURE_TOWER
@@ -29,6 +32,7 @@ Object.assign(component, {
         });
         if (targets.length) {
           this.attackClosestTarget(entity, targets);
+          return;
         }
 
       }
@@ -39,11 +43,7 @@ Object.assign(component, {
         targets = room.find(FIND_HOSTILE_CONSTRUCTION_SITES);
         if (targets.length) {
           this.attackClosestTarget(entity, targets);
-        }
-
-        targets = room.find(FIND_HOSTILE_CONSTRUCTION_SITES);
-        if (targets.length) {
-          this.healClosestTarget(entity, targets);
+          return;
         }
 
       }
@@ -54,6 +54,7 @@ Object.assign(component, {
         targets = room.find(FIND_HOSTILE_SPAWNS);
         if (targets.length) {
           this.attackClosestTarget(entity, targets);
+          return;
         }
 
         // attack enemy //FIND_HOSTILE_STRUCTURES
@@ -63,12 +64,13 @@ Object.assign(component, {
         }
 
         targets = room.find(FIND_MY_STRUCTURES, {
-          filter: {
-            structureType: STRUCTURE_TOWER
+          filter: function(structure) {
+            return structure.structureType == STRUCTURE_TOWER && structure.hitsMax > structure.hits;
           }
         });
         if (targets.length) {
           this.repairClosestTarget(entity, targets);
+          return;
         }
 
       }
@@ -76,33 +78,32 @@ Object.assign(component, {
       if (entity.energy > (entity.energyCapacity / 4) * 3) {
 
         // heal friendly non-military creeps
-        targets = room.find(FIND_MY_CREEPS);
+        targets = room.find(FIND_MY_CREEPS, {
+          filter: function(creep) {
+            return creep.hitsMax > creep.hits;
+          }
+        });
         if (targets.length) {
           this.healClosestTarget(entity, targets);
+          return;
         }
 
         // heal friendly non-essential buildings
         targets = room.find(FIND_MY_STRUCTURES, {
-          filter: {
-            structureType: STRUCTURE_TOWER
+          filter: function(structure) {
+            return structure.structureType == STRUCTURE_ROAD && structure.hitsMax > structure.hits;
           }
         });
         if (targets.length) {
           this.repairClosestTarget(entity, targets);
+          return;
         }
 
       }
 
       if (entity.energy >= (entity.energyCapacity - 100)) {
 
-        targets = room.find(FIND_STRUCTURES, {
-          filter: function(structure) {
-            return structure.hits < structure.hitsMax;
-          }
-        });
-        if (targets.length) {
-          this.repairClosestTarget(entity, targets);
-        }
+        // nothing
 
       }
 
@@ -110,18 +111,28 @@ Object.assign(component, {
 
     attackClosestTarget: function(entity, targets) {
       var target = entity.pos.findClosestByRange(targets);
-      entity.rangedAttack(target);
+      console.log('attacking: ' + JSON.stringify(target));
+      var attackCode = entity.rangedAttack(target);
+      if(attackCode != 0) {
+        console.log('Attacking failed, for unknown reason with code: ' + attackCode);
+        entity.attack(target);
+      }
     },
 
     healClosestTarget: function(entity, targets) {
       var target = entity.pos.findClosestByRange(targets);
-      entity.heal(target);
+      console.log('healing: ' + JSON.stringify(target));
+      var healCode = entity.heal(target);
+      if (healCode != 0) {
+        console.log('Repairing failed, for unknown reason with code: ' + healCode);
+      }
     },
 
     repairClosestTarget: function(entity, targets) {
-      var repairCode = entity.repair(entity.pos.findClosestByRange(targets));
+      console.log('repairing: ' + JSON.stringify(targets[0]));
+      var repairCode = entity.repair(targets[0]);
       if (repairCode != 0) {
-        // Repair failed
+        console.log('Repairing failed, for unknown reason with code: ' + repairCode);
       }
     }
 

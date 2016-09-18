@@ -134,7 +134,7 @@ Object.assign(component, {
           }
         } else {
           cMemory.buildMode = creep.memory.buildMode = false;
-          cMemory.activity = creep.memory.buildMode = 'harvesting';
+          cMemory.activity = creep.memory.activity = 'harvesting';
           creep.say('Need moarr!');
         }
       }
