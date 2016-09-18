@@ -49,7 +49,7 @@ You are now done installing.
 
 ## Optional
 
-_**Optionally* we can run bower install to install a third party library, for IDE referencing of in-game functions._
+_**Optionally** we can run bower install to install a third party library, for IDE referencing of in-game functions._
 
 ```
 bower install
