@@ -39,11 +39,11 @@ Object.assign(component, {
         // when not empty, transfer energy to target
         if (creep.carry.energy != 0) {
 
-          // priority order
+          // priority order (temp tower to bottom)
           var structuresPriority = [
-            STRUCTURE_TOWER,
             STRUCTURE_EXTENSION,
-            STRUCTURE_SPAWN
+            STRUCTURE_SPAWN,
+            STRUCTURE_TOWER
           ];
 
           var i, j;
