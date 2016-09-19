@@ -6,14 +6,14 @@ Object.assign(component, {
       MOVE,
       WORK,
       WORK,
-      CARRY
+      CARRY,
     ],
     name: 'upgrader' + _.random(1000, 1999),
     memory: {
       role: 'upgrader',
-      targetResourceId: null
-    }
+      targetResourceId: null,
+    },
 
-  }
+  },
 
 });

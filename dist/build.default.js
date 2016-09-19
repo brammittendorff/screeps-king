@@ -1,6 +1,6 @@
 module.exports = {
 
-  build: function(room) {
+  build: function (room) {
 
     // Tell user we're analyzing the room
 
@@ -13,13 +13,13 @@ module.exports = {
     // Determine roads between points of interest, avoiding workingspace
     var roadsSpace = this.spaceRoadsInRoom(POIs, workingSpace, room);
 
-    if(roadsSpace) {
+    if (roadsSpace) {
       // more to come
     }
 
   },
 
-  spaceRoadsInRoom: function(locationArray, avoidArray, room) {
+  spaceRoadsInRoom: function (locationArray, avoidArray, room) {
     var roadsSpace = [];
     for (var i in locationArray) {
       for (var j in locationArray) {
@@ -28,12 +28,8 @@ module.exports = {
             ignoreCreeps: true,
             ignoreDestructibleStructures: false,
             ignoreRoads: true,
-            //ignore: [],
-            //avoid: avoidArray
           });
-          if (!road.length) {
-            // no path
-          } else {
+          if (road.length) {
             for (var k in road) {
               roadsSpace.push(road[k]);
             }
@@ -45,7 +41,7 @@ module.exports = {
     return roadsSpace;
   },
 
-  spaceInRoom: function(locationArray, room) {
+  spaceInRoom: function (locationArray, room) {
     var workingSpace = [];
     var i = null;
     for (i in locationArray) {
@@ -56,7 +52,7 @@ module.exports = {
         for (y = -1; y <= 1; y++) {
           if (!(x == 0 && y == 0)) {
             workingSpace.push(
-              room.getPositionAt(locationObject.x + x,locationObject.y + y)
+              room.getPositionAt(locationObject.x + x, locationObject.y + y)
             );
           }
         }
@@ -66,9 +62,10 @@ module.exports = {
     return workingSpace;
   },
 
-  pois: function(room) {
+  pois: function (room) {
     // Array with points of interest in this room
     var POIs = [];
+
     // object to add info to before adding to POI
     var positionObj;
     var i;
@@ -111,6 +108,6 @@ module.exports = {
     }
 
     return POIs;
-  }
+  },
 
 };
