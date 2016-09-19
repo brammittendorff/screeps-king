@@ -115,11 +115,13 @@ Object.assign(component, {
         if(constructions.length < 1) {
 
           // heal rampart then tower by 25000 multiplier hitpoint increments
+          var targetHitpoints;
           for(var healthChunk = 1; healthChunk <= 10; healthChunk++) {
             if(healthChunk > 3) {
-              Math.pow(healthChunk, 2);
+              targetHitpoints = Math.pow(Math.pow(healthChunk, 2), 2) * 25000;
+            } else {
+              targetHitpoints = Math.pow(healthChunk, 2) * 25000;
             }
-            var targetHitpoints = Math.pow(healthChunk, 2) * 25000;
             // repair rampart
             targets = room.find(FIND_STRUCTURES, {
               filter: function (structure) {
