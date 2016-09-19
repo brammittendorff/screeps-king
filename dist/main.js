@@ -1,6 +1,6 @@
-module.exports.loop = function() {
+module.exports.loop = function () {
 
-    // Foreach room:
+  // Foreach room:
   for (var r in Game.rooms) {
     var room = Game.rooms[r];
     var foundCreeps = room.find(FIND_MY_CREEPS);
@@ -8,26 +8,26 @@ module.exports.loop = function() {
     var foundSpawns = room.find(FIND_MY_SPAWNS);
     var foundConstructionSites = room.find(FIND_MY_CONSTRUCTION_SITES);
 
-        // definitions that are needed for all rooms
-        // count entities, save to object & memory.
+    // definitions that are needed for all rooms
+    // count entities, save to object & memory.
     room.harvesters = _(foundCreeps).filter({
       memory: {
-        role: 'harvester'
-      }
+        role: 'harvester',
+      },
     }).size();
     room.memory.harvesters = room.harvesters;
 
     room.upgraders = _(foundCreeps).filter({
       memory: {
-        role: 'upgrader'
-      }
+        role: 'upgrader',
+      },
     }).size();
     room.memory.upgraders = room.upgraders;
 
     room.builders = _(foundCreeps).filter({
       memory: {
-        role: 'builder'
-      }
+        role: 'builder',
+      },
     }).size();
     room.memory.builders = room.builders;
 

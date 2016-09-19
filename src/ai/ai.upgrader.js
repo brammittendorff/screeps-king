@@ -60,13 +60,13 @@ Object.assign(component, {
       this.saveState(creep, cMemory);
     },
 
-    saveState: function(creep, cMemory) {
+    saveState: function (creep, cMemory) {
 
       // save the object that we just used this tick
       creep.memory = cMemory;
 
-    }
+    },
 
-  }
+  },
 
 });

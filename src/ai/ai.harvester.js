@@ -43,16 +43,17 @@ Object.assign(component, {
           var structuresPriority = [
             STRUCTURE_TOWER,
             STRUCTURE_EXTENSION,
-            STRUCTURE_SPAWN
+            STRUCTURE_SPAWN,
           ];
 
-          var i, j;
+          var i;
+          var j;
           for (i in structuresPriority) {
             var targetsOfOneType = creep.room.find(FIND_MY_STRUCTURES, {
               filter: function (structure) {
                 return (structure.energy < structure.energyCapacity) &&
                   (structure.structureType == structuresPriority[i]);
-              }
+              },
             });
             for (j in targetsOfOneType) {
               targets.push(targetsOfOneType[j]);
@@ -94,6 +95,7 @@ Object.assign(component, {
               break;
             }
           }
+
           // build
           if (cMemory.buildMode == 1) {
             targets = creep.room.find(FIND_MY_CONSTRUCTION_SITES);
@@ -104,21 +106,18 @@ Object.assign(component, {
                 return;
               }
             } else {
-              buildingTemplate.build(creep.room);
               // create new building if needed
-
-              //if(creep.carry.energy < creep.carryCapacity) {
+              buildingTemplate.build(creep.room);
               cMemory.activity = creep.memory.activity = 'harvesting';
-              //}
-
             }
           }
+
           // repair
           if (cMemory.buildMode == 2) {
             targets = creep.room.find(FIND_MY_STRUCTURES, {
               filter: function (structure) {
                 return (structure.hits < structure.hitsMax);
-              }
+              },
             });
             if (targets.length) {
               if (creep.repair(targets[0]) == ERR_NOT_IN_RANGE) {
@@ -142,13 +141,10 @@ Object.assign(component, {
       this.saveState(creep, cMemory);
     },
 
-    saveState: function(creep, cMemory) {
-
+    saveState: function (creep, cMemory) {
       // save the object that we just used this tick
       creep.memory = cMemory;
-
-    }
-
-  }
+    },
+  },
 
 });

@@ -12,7 +12,7 @@ module.exports = {
      * Every tick
      */
 
-      //vars
+    //vars
     var i;
     var rMemory = room.memory;
 
@@ -24,6 +24,7 @@ module.exports = {
       if (cMemory.role === undefined) {
         cMemory.role = creep.memory.role = 'harvester';
       }
+
       if (ai[cMemory.role]) {
         ai[cMemory.role].task(creep);
       }
@@ -33,7 +34,7 @@ module.exports = {
     var towers = room.find(FIND_MY_STRUCTURES, {
       filter: function (structure) {
         return structure.structureType == STRUCTURE_TOWER;
-      }
+      },
     });
     for (i in towers) {
       ai.tower.routine(towers[i]);
@@ -87,24 +88,26 @@ module.exports = {
     var bp;
     var spawn;
     if (room.harvesters < amount) {
-      bp = global.templates['_300harvester'];
+      bp = global.templates._300harvester;
       spawn = go.findAvailableSpawnInRoom(room);
       if (spawn.canCreateCreep(bp.body, bp.name, bp.memory) == 0) {
         spawn.createCreep(bp.body, bp.name, bp.memory);
         return;
       }
+
       return;
     }
 
     // create first <amount> upgraders
     amount = 5;
     if (room.upgraders < amount) {
-      bp = global.templates['_300upgrader'];
+      bp = global.templates._300upgrader;
       spawn = go.findAvailableSpawnInRoom(room);
       if (spawn.canCreateCreep(bp.body, bp.name, bp.memory) == 0) {
         spawn.createCreep(bp.body, bp.name, bp.memory);
         return;
       }
+
       return;
     }
 
@@ -122,26 +125,30 @@ module.exports = {
     if (room.harvesters < amount) {
       if (room.harvesters < 1) {
         // todo: remove this failover using a better function
-        bp = global.templates['_300harvester'];
+        bp = global.templates._300harvester;
         spawn = go.findAvailableSpawnInRoom(room);
         if (spawn.canCreateCreep(bp.body, bp.name, bp.memory) == 0) {
           spawn.createCreep(bp.body, bp.name, bp.memory);
           return;
         }
       }
+
       if (room.energyCapacityAvailable >= 800) {
         if (room.energyAvailable < 800) {
           return;
         }
-        bp = global.templates['_800harvester'];
+
+        bp = global.templates._800harvester;
       } else {
-        bp = global.templates['_550harvester'];
+        bp = global.templates._550harvester;
       }
+
       spawn = go.findAvailableSpawnInRoom(room);
       if (spawn.canCreateCreep(bp.body, bp.name, bp.memory) == 0) {
         spawn.createCreep(bp.body, bp.name, bp.memory);
         return;
       }
+
       return;
     }
 
@@ -152,18 +159,21 @@ module.exports = {
         if (room.energyAvailable < 800) {
           return;
         }
-        bp = global.templates['_800upgrader'];
+
+        bp = global.templates._800upgrader;
       } else {
-        bp = global.templates['_550upgrader'];
+        bp = global.templates._550upgrader;
       }
+
       spawn = go.findAvailableSpawnInRoom(room);
       if (spawn.canCreateCreep(bp.body, bp.name, bp.memory) == 0) {
         spawn.createCreep(bp.body, bp.name, bp.memory);
         return;
       }
+
       return;
     }
 
-  }
+  },
 
 };
