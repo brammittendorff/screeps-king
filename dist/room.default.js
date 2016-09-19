@@ -89,7 +89,7 @@ module.exports = {
     if (room.harvesters < amount) {
       bp = global.templates['_300harvester'];
       spawn = go.findAvailableSpawnInRoom(room);
-      if (spawn.canCreateCreep(bp.body, bp.name, bp.memory) == 0) {
+      if (spawn && spawn.canCreateCreep(bp.body, bp.name, bp.memory) == 0) {
         spawn.createCreep(bp.body, bp.name, bp.memory);
         return;
       }
@@ -101,7 +101,7 @@ module.exports = {
     if (room.upgraders < amount) {
       bp = global.templates['_300upgrader'];
       spawn = go.findAvailableSpawnInRoom(room);
-      if (spawn.canCreateCreep(bp.body, bp.name, bp.memory) == 0) {
+      if (spawn && spawn.canCreateCreep(bp.body, bp.name, bp.memory) == 0) {
         spawn.createCreep(bp.body, bp.name, bp.memory);
         return;
       }
@@ -124,7 +124,7 @@ module.exports = {
         // todo: remove this failover using a better function
         bp = global.templates['_300harvester'];
         spawn = go.findAvailableSpawnInRoom(room);
-        if (spawn.canCreateCreep(bp.body, bp.name, bp.memory) == 0) {
+        if (spawn && spawn.canCreateCreep(bp.body, bp.name, bp.memory) == 0) {
           spawn.createCreep(bp.body, bp.name, bp.memory);
           return;
         }
@@ -138,7 +138,7 @@ module.exports = {
         bp = global.templates['_550harvester'];
       }
       spawn = go.findAvailableSpawnInRoom(room);
-      if (spawn.canCreateCreep(bp.body, bp.name, bp.memory) == 0) {
+      if (spawn && spawn.canCreateCreep(bp.body, bp.name, bp.memory) == 0) {
         spawn.createCreep(bp.body, bp.name, bp.memory);
         return;
       }
@@ -157,7 +157,7 @@ module.exports = {
         bp = global.templates['_550upgrader'];
       }
       spawn = go.findAvailableSpawnInRoom(room);
-      if (spawn.canCreateCreep(bp.body, bp.name, bp.memory) == 0) {
+      if (spawn && spawn.canCreateCreep(bp.body, bp.name, bp.memory) == 0) {
         spawn.createCreep(bp.body, bp.name, bp.memory);
         return;
       }

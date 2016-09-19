@@ -98,16 +98,7 @@ Object.assign(component, {
           return;
         }
 
-        // repair rampart
-        targets = room.find(FIND_STRUCTURES, {
-          filter: function(structure) {
-            return structure.structureType == STRUCTURE_RAMPART && structure.hitsMax > structure.hits;
-          }
-        });
-        if (targets.length) {
-          this.repairClosestTarget(entity, targets);
-          return;
-        }
+
 
         // repair roads
         targets = room.find(FIND_STRUCTURES, {
@@ -120,10 +111,21 @@ Object.assign(component, {
           return;
         }
 
+        // repair rampart
+        targets = room.find(FIND_STRUCTURES, {
+          filter: function(structure) {
+            return structure.structureType == STRUCTURE_RAMPART && structure.hits < 250000;
+          }
+        });
+        if (targets.length) {
+          this.repairClosestTarget(entity, targets);
+          return;
+        }
+
         // repair wall
         targets = room.find(FIND_STRUCTURES, {
           filter: function(structure) {
-            return structure.structureType == STRUCTURE_WALL && structure.hitsMax > structure.hits;
+            return structure.structureType == STRUCTURE_WALL && structure.hits < 100000;
           }
         });
         if (targets.length) {
@@ -155,7 +157,7 @@ Object.assign(component, {
     },
 
     repairClosestTarget: function(entity, targets) {
-      var target = targets[0];
+      var target = entity.pos.findClosestByRange(targets);
       //console.log('repairing: ' + JSON.stringify(target));
       var repairCode = entity.repair(target);
       if (repairCode != 0) {
