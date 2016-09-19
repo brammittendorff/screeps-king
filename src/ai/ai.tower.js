@@ -26,8 +26,8 @@ Object.assign(component, {
 
         // attack enemy military structures //STRUCTURE_TOWER
         targets = room.find(FIND_HOSTILE_STRUCTURES, {
-          filter: {
-            structureType: STRUCTURE_TOWER,
+          filter: function(structure) {
+            return structure.structureType == STRUCTURE_TOWER;
           },
         });
         if (targets.length) {
@@ -91,7 +91,7 @@ Object.assign(component, {
         // repair friendly buildings
         targets = room.find(FIND_MY_STRUCTURES, {
           filter: function (structure) {
-            return structure.hitsMax > structure.hits;
+            return structure.hitsMax > structure.hits && structure.structureType != STRUCTURE_RAMPART;
           }
         });
         if (targets.length) {
@@ -114,35 +114,26 @@ Object.assign(component, {
         var constructions = room.find(FIND_CONSTRUCTION_SITES);
         if(constructions.length < 1) {
 
-          // heal rampart then tower by 25000 multiplier hitpoint increments
-          var targetHitpoints;
-          for(var healthChunk = 1; healthChunk <= 10; healthChunk++) {
-            if(healthChunk > 3) {
-              targetHitpoints = Math.pow(Math.pow(healthChunk, 2), 2) * 25000;
-            } else {
-              targetHitpoints = Math.pow(healthChunk, 2) * 25000;
+          // repair rampart
+          targets = room.find(FIND_STRUCTURES, {
+            filter: function (structure) {
+              return structure.structureType == STRUCTURE_RAMPART && structure.hits < structure.hitsMax;
             }
-            // repair rampart
-            targets = room.find(FIND_STRUCTURES, {
-              filter: function (structure) {
-                return structure.structureType == STRUCTURE_RAMPART && structure.hits < targetHitpoints;
-              }
-            });
-            if (targets.length) {
-              this.repairClosestTarget(entity, targets);
-              return;
-            }
+          });
+          if (targets.length) {
+            this.repairLowestTarget(entity, targets);
+            return;
+          }
 
-            // repair wall
-            targets = room.find(FIND_STRUCTURES, {
-              filter: function (structure) {
-                return structure.structureType == STRUCTURE_WALL && structure.hits < targetHitpoints;
-              }
-            });
-            if (targets.length) {
-              this.repairClosestTarget(entity, targets);
-              return;
+          // repair wall
+          targets = room.find(FIND_STRUCTURES, {
+            filter: function (structure) {
+              return structure.structureType == STRUCTURE_WALL && structure.hits < structure.hitsMax;
             }
+          });
+          if (targets.length) {
+            this.repairLowestTarget(entity, targets);
+            return;
           }
 
         }
@@ -154,10 +145,9 @@ Object.assign(component, {
     attackClosestTarget: function (entity, targets) {
       var target = entity.pos.findClosestByRange(targets);
       //console.log('attacking: ' + JSON.stringify(target));
-      var attackCode = entity.rangedAttack(target);
+      var attackCode = entity.attack(target);
       if (attackCode != 0) {
         console.log('Attacking failed, for unknown reason with code: ' + attackCode);
-        entity.attack(target);
       }
     },
 
@@ -173,6 +163,16 @@ Object.assign(component, {
     repairClosestTarget: function (entity, targets) {
       var target = entity.pos.findClosestByRange(targets);
       //console.log('repairing: ' + JSON.stringify(target));
+      var repairCode = entity.repair(target);
+      if (repairCode != 0) {
+        console.log('Repairing failed, for unknown reason with code: ' + repairCode);
+      }
+    },
+
+    repairLowestTarget: function (entity, targets) {
+      var target = _.minBy(targets, function(target) {
+        return target.hits;
+      });
       var repairCode = entity.repair(target);
       if (repairCode != 0) {
         console.log('Repairing failed, for unknown reason with code: ' + repairCode);

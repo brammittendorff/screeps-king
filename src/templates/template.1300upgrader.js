@@ -1,8 +1,9 @@
 Object.assign(component, {
 
-  _800upgrader: {
+  _1300upgrader: {
 
     body: [
+      MOVE,
       MOVE,
       WORK,
       WORK,
@@ -11,6 +12,11 @@ Object.assign(component, {
       WORK,
       WORK,
       WORK,
+      WORK,
+      WORK,
+      WORK,
+      WORK,
+      CARRY,
       CARRY,
     ],
     name: 'upgrader' + _.random(1000, 1999),

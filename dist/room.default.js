@@ -162,8 +162,12 @@ module.exports = {
         if (room.energyAvailable < 800) {
           return;
         }
-
         bp = global.templates._800upgrader;
+      } else if (room.energyCapacityAvailable >= 1300) {
+        if (room.energyAvailable < 1300) {
+          return;
+        }
+        bp = global.templates._1300upgrader;
       } else {
         bp = global.templates._550upgrader;
       }
