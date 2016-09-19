@@ -110,26 +110,39 @@ Object.assign(component, {
           return;
         }
 
-        // repair rampart
-        targets = room.find(FIND_STRUCTURES, {
-          filter: function(structure) {
-            return structure.structureType == STRUCTURE_RAMPART && structure.hits < 250000;
-          }
-        });
-        if (targets.length) {
-          this.repairClosestTarget(entity, targets);
-          return;
-        }
+        // if we're not building anything, distribute between walls and ramparts
+        var constructions = room.find(FIND_CONSTRUCTION_SITES);
+        if(constructions.length < 1) {
 
-        // repair wall
-        targets = room.find(FIND_STRUCTURES, {
-          filter: function(structure) {
-            return structure.structureType == STRUCTURE_WALL && structure.hits < 100000;
+          // heal rampart then tower by 25000 multiplier hitpoint increments
+          for(var healthChunk = 1; healthChunk <= 10; healthChunk++) {
+            if(healthChunk > 3) {
+              Math.pow(healthChunk, 2);
+            }
+            var targetHitpoints = Math.pow(healthChunk, 2) * 25000;
+            // repair rampart
+            targets = room.find(FIND_STRUCTURES, {
+              filter: function (structure) {
+                return structure.structureType == STRUCTURE_RAMPART && structure.hits < targetHitpoints;
+              }
+            });
+            if (targets.length) {
+              this.repairClosestTarget(entity, targets);
+              return;
+            }
+
+            // repair wall
+            targets = room.find(FIND_STRUCTURES, {
+              filter: function (structure) {
+                return structure.structureType == STRUCTURE_WALL && structure.hits < targetHitpoints;
+              }
+            });
+            if (targets.length) {
+              this.repairClosestTarget(entity, targets);
+              return;
+            }
           }
-        });
-        if (targets.length) {
-          this.repairClosestTarget(entity, targets);
-          return;
+
         }
 
       }
