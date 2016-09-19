@@ -6,7 +6,7 @@ Object.assign(component, {
      * @see http://support.screeps.com/hc/en-us/articles/203339002-Defending-your-room
      */
 
-    routine: function(entity) {
+    routine: function (entity) {
 
       var targets = {};
       var room = entity.room;
@@ -26,7 +26,9 @@ Object.assign(component, {
 
         // attack enemy military structures //STRUCTURE_TOWER
         targets = room.find(FIND_HOSTILE_STRUCTURES, {
-          filter: {structureType: STRUCTURE_TOWER}
+          filter: {
+            structureType: STRUCTURE_TOWER,
+          },
         });
         if (targets.length) {
           this.attackClosestTarget(entity, targets);
@@ -62,9 +64,9 @@ Object.assign(component, {
         }
 
         targets = room.find(FIND_MY_STRUCTURES, {
-          filter: function(structure) {
+          filter: function (structure) {
             return structure.structureType == STRUCTURE_TOWER && structure.hitsMax > structure.hits;
-          }
+          },
         });
         if (targets.length) {
           this.repairClosestTarget(entity, targets);
@@ -73,14 +75,13 @@ Object.assign(component, {
 
       }
 
-      if (entity.energy > ((entity.energyCapacity / 4) * 3)) {
-
+      if (entity.energy > (entity.energyCapacity / 4) * 3) {
 
         // heal friendly non-military creeps
         targets = room.find(FIND_MY_CREEPS, {
-          filter: function(creep) {
+          filter: function (creep) {
             return creep.hitsMax > creep.hits;
-          }
+          },
         });
         if (targets.length) {
           this.healClosestTarget(entity, targets);
@@ -89,7 +90,7 @@ Object.assign(component, {
 
         // repair friendly buildings
         targets = room.find(FIND_MY_STRUCTURES, {
-          filter: function(structure) {
+          filter: function (structure) {
             return structure.hitsMax > structure.hits;
           }
         });
@@ -98,13 +99,11 @@ Object.assign(component, {
           return;
         }
 
-
-
         // repair roads
         targets = room.find(FIND_STRUCTURES, {
           filter: function(structure) {
             return structure.structureType == STRUCTURE_ROAD && structure.hitsMax > structure.hits;
-          }
+          },
         });
         if (targets.length) {
           this.repairClosestTarget(entity, targets);
@@ -137,17 +136,17 @@ Object.assign(component, {
 
     },
 
-    attackClosestTarget: function(entity, targets) {
+    attackClosestTarget: function (entity, targets) {
       var target = entity.pos.findClosestByRange(targets);
       //console.log('attacking: ' + JSON.stringify(target));
       var attackCode = entity.rangedAttack(target);
-      if(attackCode != 0) {
+      if (attackCode != 0) {
         console.log('Attacking failed, for unknown reason with code: ' + attackCode);
         entity.attack(target);
       }
     },
 
-    healClosestTarget: function(entity, targets) {
+    healClosestTarget: function (entity, targets) {
       var target = entity.pos.findClosestByRange(targets);
       //console.log('healing: ' + JSON.stringify(target));
       var healCode = entity.heal(target);
@@ -156,15 +155,15 @@ Object.assign(component, {
       }
     },
 
-    repairClosestTarget: function(entity, targets) {
+    repairClosestTarget: function (entity, targets) {
       var target = entity.pos.findClosestByRange(targets);
       //console.log('repairing: ' + JSON.stringify(target));
       var repairCode = entity.repair(target);
       if (repairCode != 0) {
         console.log('Repairing failed, for unknown reason with code: ' + repairCode);
       }
-    }
+    },
 
-  }
+  },
 
 });

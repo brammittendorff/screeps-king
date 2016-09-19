@@ -1,6 +1,6 @@
 module.exports = {
 
-  selectClosestTo: function(entity) {
+  selectClosestTo: function (entity) {
     var room = entity.room;
     var sources = room.find(FIND_SOURCES);
     var source = entity.pos.findClosestByRange(sources);
@@ -8,18 +8,19 @@ module.exports = {
     if (!source.id) {
       return false;
     }
+
     return source.id;
   },
 
-  selectSecondClosestTo: function(entity) {
+  selectSecondClosestTo: function (entity) {
 
     var room = entity.room;
     var sources = room.find(FIND_SOURCES);
     var exclude = entity.pos.findClosestByRange(sources);
     var source = entity.pos.findClosestByRange(sources, {
-      filter: function(s) {
-        return s.id != exclude.id;
-      }
+      filter: function (src) {
+        return src.id != exclude.id;
+      },
     });
 
     if (!source.id) {
@@ -27,6 +28,6 @@ module.exports = {
     }
 
     return source.id;
-  }
+  },
 
 };

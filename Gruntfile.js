@@ -1,10 +1,11 @@
-module.exports = function(grunt) {
+module.exports = function (grunt) {
 
   // load npm tasks
   grunt.loadNpmTasks('grunt-screeps');
   grunt.loadNpmTasks('grunt-contrib-watch');
   grunt.loadNpmTasks('grunt-contrib-concat');
   grunt.loadNpmTasks('grunt-eslint');
+  grunt.loadNpmTasks('grunt-jscs');
 
   // unix LF
   grunt.util.linefeed = '\n';
@@ -14,39 +15,39 @@ module.exports = function(grunt) {
     concat: {
       options: {
         banner: 'var component = {};\n\n',
-        footer: '\nmodule.exports = component;'
+        footer: '\nmodule.exports = component;',
       },
       dist_ai: {
         src: ['src/ai/*.js'],
-        dest: 'dist/ai.js'
+        dest: 'dist/ai.js',
       },
       dist_templates: {
         src: ['src/templates/*.js'],
-        dest: 'dist/templates.js'
-      }
+        dest: 'dist/templates.js',
+      },
     },
     eslint: {
-      target: ['dist/*.js', 'src/*/*.js']
+      target: ['dist/*.js', 'src/*/*.js'],
     },
     screeps: {
       options: {
         email: process.env.SCREEPS_EMAIL,
         password: process.env.SCREEPS_PASSWORD,
-        branch: 'my-screeps'
+        branch: 'my-screeps',
       },
       dist: {
-        src: ['dist/*.js']
-      }
+        src: ['dist/*.js'],
+      },
     },
     watch: {
       scripts: {
         files: ['src/*/*.js'],
         tasks: ['concat', 'eslint', 'screeps'],
         options: {
-          interrupt: false
-        }
-      }
-    }
+          interrupt: false,
+        },
+      },
+    },
   });
 
   // register tasks

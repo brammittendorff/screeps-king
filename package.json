@@ -11,6 +11,7 @@
     "grunt-contrib-watch": "^1.0.0",
     "grunt-env": "^0.4.4",
     "grunt-eslint": "^19.0.0",
+    "grunt-jscs": "^3.0.1",
     "grunt-screeps": "^1.2.1"
   },
   "scripts": {

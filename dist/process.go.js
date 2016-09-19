@@ -1,6 +1,6 @@
 module.exports = {
 
-  findAvailableSpawnInRoom: function(room) {
+  findAvailableSpawnInRoom: function (room) {
     var spawns = room.find(FIND_MY_SPAWNS);
     var s = null;
     for (s in spawns) {
@@ -9,7 +9,8 @@ module.exports = {
         return spawn;
       }
     }
+
     return false;
-  }
+  },
 
 };
