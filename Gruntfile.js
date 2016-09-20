@@ -51,7 +51,6 @@ module.exports = function (grunt) {
   });
 
   // register tasks
-  grunt.registerTask('default', ['concat', 'eslint', 'screeps']);
   grunt.registerTask('sync', ['concat', 'eslint', 'screeps']);
 
 };
