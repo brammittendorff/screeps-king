@@ -1,3 +1,20 @@
+/**
+ * @Title: my-screeps
+ * @Description: Home brew AI Script for Screeps.com
+ *
+ * @Author: Webber, Bram
+ * @Date: 20-09-2016
+ * @See: https://github.com/brammittendorff/my-screeps
+ */
+
+// load files into objects
+global.controller   = require('controllers');
+global.go           = require('functions');
+global.templates    = require('templates');
+global.ai           = require('ai');
+global.patterns     = require('patterns');
+
+// loop for game ticks
 module.exports.loop = function () {
 
   // Foreach room:
@@ -47,22 +64,8 @@ module.exports.loop = function () {
       room.template = room.memory.template;
     }
 
-    // require room template
-    var template;
-    try {
-      template = require('room.' + room.template);
-    } catch (e) {
-      try {
-        template = require('room.default');
-      } catch (e) {
-        template = false;
-      }
-    }
-
-    // process room according to template
-    if (template) {
-      template.execute(room);
-    }
+    // run room controller for this template
+    global.controller.room[room.template].execute(room);
 
   }
 };

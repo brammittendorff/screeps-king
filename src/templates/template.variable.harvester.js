@@ -7,7 +7,8 @@ Object.assign(component, {
       if(energy) {
         // something
       }
-      // var component, components = this.settings.components;
+      // var component;
+      // var components = this.settings.components;
       // var i;
       // var name;
       // var build = {
@@ -31,6 +32,8 @@ Object.assign(component, {
       //   if(Object.hasOwnProperty(name)) {
       //     component = components[name];
       //     var ratio = build.chunkSize / (component.size * component.ratio);
+      //     // and then something to determine what the next 2 steps of 50 energy would be most efficient.
+      //       // say 1 body or 2 carry or 1 carry and 1 move
       //   }
       // }
 

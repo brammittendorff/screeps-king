@@ -5,13 +5,12 @@ Object.assign(component, {
     task: function (creep) {
 
       //vars
-      var buildingTemplate = require('build.' + creep.room.template);
       var cMemory = creep.memory;
 
       // initiate
       if (!cMemory.initiated) {
         cMemory.activity = 'harvesting';
-        cMemory.targetSourceId = global.resourceSelector.selectClosestTo(creep);
+        cMemory.targetSourceId = global.go.resource.selectClosestTo(creep);
         cMemory.initiated = true;
         this.saveState(creep, cMemory);
         creep.say('Work Work!');
@@ -107,7 +106,7 @@ Object.assign(component, {
               }
             } else {
               // create new building if needed
-              buildingTemplate.build(creep.room);
+              global.patterns.buildings[creep.room.template].build(creep.room);
               cMemory.activity = creep.memory.activity = 'harvesting';
             }
           }

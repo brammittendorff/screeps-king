@@ -1,4 +1,4 @@
-module.exports = {
+Object.assign(component, {
 
   findAvailableSpawnInRoom: function (room) {
     var spawns = room.find(FIND_MY_SPAWNS);
@@ -13,4 +13,4 @@ module.exports = {
     return false;
   },
 
-};
+});

@@ -29,5 +29,8 @@
   "bugs": {
     "url": "https://github.com/brammittendorff/my-screeps/issues"
   },
-  "homepage": "https://github.com/brammittendorff/my-screeps#readme"
+  "homepage": "https://github.com/brammittendorff/my-screeps#readme",
+  "devDependencies": {
+    "grunt-contrib-copy": "^1.0.0"
+  }
 }

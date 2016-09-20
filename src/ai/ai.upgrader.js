@@ -3,12 +3,13 @@ Object.assign(component, {
   upgrader: {
 
     task: function (creep) {
+
       var cMemory = creep.memory;
 
       // initiate
       if (!cMemory.initiated) {
         cMemory.activity = 'harvesting';
-        cMemory.targetSourceId = global.resourceSelector.selectSecondClosestTo(creep);
+        cMemory.targetSourceId = global.go.resource.selectSecondClosestTo(creep);
         cMemory.initiated = true;
         this.saveState(creep, cMemory);
         creep.say('++RCL;');
