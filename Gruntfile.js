@@ -4,7 +4,6 @@ module.exports = function (grunt) {
   grunt.loadNpmTasks('grunt-screeps');
   grunt.loadNpmTasks('grunt-contrib-watch');
   grunt.loadNpmTasks('grunt-contrib-concat');
-  grunt.loadNpmTasks('grunt-contrib-copy');
   grunt.loadNpmTasks('grunt-eslint');
   grunt.loadNpmTasks('grunt-jscs');
 
@@ -38,13 +37,13 @@ module.exports = function (grunt) {
         src: ['src/templates/*.js'],
         dest: 'dist/templates.js',
       },
-    },
-    copy: {
-      main: {
-        expand: true,
+      dist_main: {
+        options: {
+          banner: '',
+          footer: '',
+        },
         src: 'src/main.js',
-        dest: 'dist/',
-        flatten: true,
+        dest: 'dist/main.js',
       }
     },
     eslint: {
@@ -72,6 +71,6 @@ module.exports = function (grunt) {
   });
 
   // register tasks
-  grunt.registerTask('sync', ['concat', 'copy', 'eslint', 'screeps']);
+  grunt.registerTask('sync', ['concat', 'eslint', 'screeps']);
 
 };
