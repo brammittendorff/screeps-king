@@ -117,7 +117,7 @@ Object.assign(component, {
           // repair rampart
           targets = room.find(FIND_STRUCTURES, {
             filter: function (structure) {
-              return structure.structureType == STRUCTURE_RAMPART && structure.hits < 250000;
+              return structure.structureType == STRUCTURE_RAMPART && structure.hits < 10 * 1000 * 1000;
             }
           });
           if (targets.length) {
@@ -128,7 +128,7 @@ Object.assign(component, {
           // repair wall
           targets = room.find(FIND_STRUCTURES, {
             filter: function (structure) {
-              return structure.structureType == STRUCTURE_WALL && structure.hits < 100000;
+              return structure.structureType == STRUCTURE_WALL && structure.hits < 300 * 1000 * 1000;
             }
           });
           if (targets.length) {
