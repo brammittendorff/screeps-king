@@ -5,7 +5,8 @@ Object.assign(component, {
     body: [
       MOVE,
       MOVE,
-      WORK,
+      MOVE,
+      MOVE,
       WORK,
       WORK,
       WORK,
