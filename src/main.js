@@ -55,8 +55,6 @@ module.exports.loop = function () {
   // Structures
   _.forEach(Game.structures, (structure) => {
     global.controller.structure.routine(structure);
-
   });
-
 
 };
