@@ -4,7 +4,7 @@ Object.assign(component, {
 
     'default': {
 
-      execute: function (room) {
+      routine: function (room) {
 
         /**
          * Every tick
@@ -14,23 +14,7 @@ Object.assign(component, {
         var i;
         var rMemory = room.memory;
 
-        // task creeps
-        var creeps = room.find(FIND_MY_CREEPS);
-        for (i in creeps) {
-          var creep = creeps[i];
-          var cMemory = creep.memory;
-
-          // no role, be a harvester
-          if (cMemory.role === undefined) {
-            cMemory.role = creep.memory.role = 'harvester';
-          }
-
-          // task creep by their role
-          if (global.ai[cMemory.role]) {
-            global.ai[cMemory.role].task(creep);
-          }
-        }
-
+        // todo: clean up this stuff, put in controller.tower or controller.buildings.tower
         // task towers
         var towers = room.find(FIND_MY_STRUCTURES, {
           filter: function (structure) {
@@ -56,7 +40,7 @@ Object.assign(component, {
          */
 
         if (rMemory.stage == 0) {
-          this.stage0(room, rMemory);
+          this.stage0(room);
           return;
         }
 
@@ -71,7 +55,9 @@ Object.assign(component, {
 
       },
 
-      stage0: function (room, rMemory) {
+      stage0: function (room) {
+
+        var rMemory = room.memory;
 
         // advance to next room?
         if (room.energyCapacityAvailable >= 550) {
