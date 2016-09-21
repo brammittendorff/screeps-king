@@ -106,7 +106,7 @@ Object.assign(component, {
               }
             } else {
               // create new building if needed
-              global.patterns.buildings[creep.room.template].build(creep.room);
+              global.patterns.buildings[creep.room.memory.template].build(creep.room);
               cMemory.activity = creep.memory.activity = 'harvesting';
             }
           }
