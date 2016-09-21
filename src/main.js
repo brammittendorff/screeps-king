@@ -7,15 +7,40 @@
  * @See: https://github.com/brammittendorff/my-screeps
  */
 
-// load files into objects
+/**
+ *  Load files into global
+ */
+
+global.ai           = require('ai');
+global.config       = require('config');
 global.controller   = require('controllers');
 global.go           = require('functions');
-global.templates    = require('templates');
-global.ai           = require('ai');
 global.patterns     = require('patterns');
+global.templates    = require('templates');
 
-// loop for game ticks
+/**
+ * Loop through game ticks
+ */
+
 module.exports.loop = function () {
+
+  /**
+   * Update Memory
+   */
+
+  // Creeps
+  _.forEach(Game.creeps, (creep) => {
+    global.controller.memory.updateByCreep(creep);
+  });
+
+  // Rooms
+  _.forEach(Game.rooms, (room) => {
+    global.controller.memory.updateByRoom(room);
+  });
+
+  /**
+   * Distribute Tasks
+   */
 
   // Foreach room:
   for (var r in Game.rooms) {

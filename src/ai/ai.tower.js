@@ -114,21 +114,13 @@ Object.assign(component, {
         var constructions = room.find(FIND_CONSTRUCTION_SITES);
         if(constructions.length < 1) {
 
-          // repair rampart
+          // repair ramparts and walls
           targets = room.find(FIND_STRUCTURES, {
             filter: function (structure) {
-              return structure.structureType == STRUCTURE_RAMPART && structure.hits < 10 * 1000 * 1000;
-            }
-          });
-          if (targets.length) {
-            this.repairLowestTarget(entity, targets);
-            return;
-          }
-
-          // repair wall
-          targets = room.find(FIND_STRUCTURES, {
-            filter: function (structure) {
-              return structure.structureType == STRUCTURE_WALL && structure.hits < 300 * 1000 * 1000;
+              return (
+                  structure.structureType == STRUCTURE_RAMPART ||
+                  structure.structureType == STRUCTURE_WALL
+                ) && structure.hits < structure.hitsMax;
             }
           });
           if (targets.length) {

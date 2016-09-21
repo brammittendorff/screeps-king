@@ -10,6 +10,9 @@ module.exports = function (grunt) {
   // unix LF
   grunt.util.linefeed = '\n';
 
+  // register tasks
+  grunt.registerTask('sync', ['concat', 'eslint', 'screeps']);
+
   // grunt init config
   grunt.initConfig({
     concat: {
@@ -20,6 +23,10 @@ module.exports = function (grunt) {
       dist_ai: {
         src: ['src/ai/*.js'],
         dest: 'dist/ai.js',
+      },
+      dist_config: {
+        src: ['src/config/*.js'],
+        dest: 'dist/config.js'
       },
       dist_controller: {
         src: ['src/controllers/*.js'],
@@ -62,7 +69,7 @@ module.exports = function (grunt) {
     watch: {
       scripts: {
         files: ['src/*/*.js'],
-        tasks: ['concat', 'eslint', 'screeps'],
+        tasks: ['sync'],
         options: {
           interrupt: false,
         },
@@ -70,7 +77,6 @@ module.exports = function (grunt) {
     },
   });
 
-  // register tasks
-  grunt.registerTask('sync', ['concat', 'eslint', 'screeps']);
+
 
 };
