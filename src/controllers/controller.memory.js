@@ -3,37 +3,28 @@ Object.assign(component, {
   memory: {
 
     updateByCreep: function (creep) {
-
-      // if new creep or new code version, (re)initialize
+      // initialize once
       if( !creep.memory.version || creep.memory.version < global.config.version ) {
         this.initCreep(creep);
       }
 
-      // every tick
-
+      // update memory for this creep
     },
 
     initCreep: function (creep) {
-
       creep.memory.version = global.config.version;
-
     },
 
     updateByRoom: function (room) {
-
-      // if new room or new code version, (re)initialize
+      // initialize once
       if( !room.memory.version || room.memory.version < global.config.version ) {
         this.initRoom(room);
-      } else {
-        this.initRoom(room);
       }
-
-      // every tick
 
     },
 
     initRoom: function (room) {
-
+      console.log('[' + room.name + '][Memory] Initiating.');
       room.memory.version = global.config.version;
 
       // todo: clean this stuff up
@@ -80,6 +71,8 @@ Object.assign(component, {
       } else {
         room.template = room.memory.template;
       }
+
+      console.log(JSON.stringify(room.memory));
 
     }
 

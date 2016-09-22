@@ -102,7 +102,7 @@ Object.assign(component, {
 
       stage1: function (room) {
 
-        if (room.energyAvailable < 550) {
+        if (room.energyAvailable < 300) {
           return;
         }
 
@@ -111,6 +111,7 @@ Object.assign(component, {
         var amount = 4; // no more than spaces for resource closest tot spawn
         var bp;
         var spawn;
+        console.log(JSON.stringify(room.memory));
         if (room.memory.harvesters < amount) {
           if (room.memory.harvesters < 1) {
             // todo: remove this failover using a better function
@@ -121,13 +122,10 @@ Object.assign(component, {
               spawn.createCreep(bp.body, bp.name, bp.memory);
               return;
             }
-          }
-
-          if (room.energyCapacityAvailable >= 800) {
+          } else if (room.energyCapacityAvailable >= 800) {
             if (room.energyAvailable < 800) {
               return;
             }
-
             bp = global.templates._800harvester;
           } else {
             bp = global.templates._550harvester;
