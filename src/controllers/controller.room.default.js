@@ -32,7 +32,7 @@ Object.assign(component, {
          */
 
         if (!rMemory.stage) {
-          rMemory.stage = room.memory.stage = 0;
+          rMemory.stage = 0;
         }
 
         /**
@@ -61,7 +61,7 @@ Object.assign(component, {
 
         // advance to next room?
         if (room.energyCapacityAvailable >= 550) {
-          rMemory.stage = room.memory.stage = 1;
+          rMemory.stage = 1;
           this.stage1(room);
         }
 
@@ -74,7 +74,7 @@ Object.assign(component, {
         var amount = 3; // no more than spaces for resource closest tot spawn
         var bp;
         var spawn;
-        if (room.memory.harvesters < amount) {
+        if (rMemory.harvesters < amount) {
           bp = global.templates._300harvester;
           spawn = global.go.findAvailableSpawnInRoom(room);
           if (spawn && spawn.canCreateCreep(bp.body, bp.name, bp.memory) == 0) {
@@ -87,7 +87,7 @@ Object.assign(component, {
 
         // create first <amount> upgraders
         amount = 5;
-        if (room.memory.upgraders < amount) {
+        if (rMemory.upgraders < amount) {
           bp = global.templates._300upgrader;
           spawn = global.go.findAvailableSpawnInRoom(room);
           if (spawn && spawn.canCreateCreep(bp.body, bp.name, bp.memory) == 0) {
@@ -102,6 +102,8 @@ Object.assign(component, {
 
       stage1: function (room) {
 
+        var rMemory = room.memory;
+
         if (room.energyAvailable < 300) {
           return;
         }
@@ -111,8 +113,8 @@ Object.assign(component, {
         var bp;
         var spawn;
         //console.log(JSON.stringify(room.memory));
-        if (room.memory.harvesters < amount) {
-          if (room.memory.harvesters < 1) {
+        if (rMemory.harvesters < amount) {
+          if (rMemory.harvesters < 1) {
             // todo: remove this failover using a better function
             bp = global.templates._300harvester;
             spawn = global.go.findAvailableSpawnInRoom(room);
@@ -141,7 +143,7 @@ Object.assign(component, {
 
         // create <amount> bigger upgraders
         amount = 5;
-        if (room.memory.upgraders < amount) {
+        if (rMemory.upgraders < amount) {
           if (room.energyCapacityAvailable >= 1300) {
             if (room.energyAvailable < 1300) {
               return;

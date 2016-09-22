@@ -16,65 +16,77 @@ Object.assign(component, {
     },
 
     updateByRoom: function (room) {
+
+      var rMemory  = room.memory;
+
       // initialize once
-      if( !room.memory.version || room.memory.version < global.config.version ) {
+      if (!rMemory.version || rMemory.version < global.config.version) {
         this.initRoom(room);
-      } else {
-        this.initRoom(room);
+      }
+
+      // per tick
+      rMemory.ticks += 1;
+
+      // even ticks - Creeps
+      if(!(rMemory.ticks & 1)) {
+        let myCreeps            = room.find(FIND_MY_CREEPS);
+        rMemory.harvesters      = _(myCreeps).filter({ memory: { role: 'harvester' } }).size();
+        rMemory.upgraders       = _(myCreeps).filter({ memory: { role: 'upgrader'  } }).size();
+        rMemory.hostiles        = room.find(FIND_HOSTILE_CREEPS);
+        rMemory.hostilesCount   = _(rMemory.hostiles).size();
+      }
+
+      // odd ticks - Buildings
+      if(rMemory.ticks & 1) {
+        let myStructures        = room.find(FIND_MY_STRUCTURES);
+        let mySpawns            = room.find(FIND_MY_SPAWNS);
+        let myConstructionSites = room.find(FIND_MY_CONSTRUCTION_SITES);
+        rMemory.structures      = _(myStructures).size();
+        rMemory.spawns          = _(mySpawns).size();
+        rMemory.constructions   = _(myConstructionSites).size();
+      }
+
+      // 1 minute
+      if( (rMemory.ticks & 0x1A) == 0) {
+        // do something
+      }
+
+      // 5 minutes
+      if( (rMemory.ticks & 0x82) == 0) {
+       // do something
       }
 
     },
 
     initRoom: function (room) {
+
       console.log('[' + room.name + '][Memory] Initiating.');
-      room.memory.version = global.config.version;
 
-      // todo: clean this stuff up
-      var foundCreeps = room.find(FIND_MY_CREEPS);
-      var foundStructures = room.find(FIND_MY_STRUCTURES);
-      var foundSpawns = room.find(FIND_MY_SPAWNS);
-      var foundConstructionSites = room.find(FIND_MY_CONSTRUCTION_SITES);
+      var rMemory = room.memory;
 
-      // definitions that are needed for all rooms
-      // count entities, save to object & memory.
-      room.harvesters = _(foundCreeps).filter({
-        memory: {
-          role: 'harvester',
-        },
-      }).size();
-      room.memory.harvesters = room.harvesters;
+      // things to keep
+      var stage    = rMemory.stage    ? rMemory.stage    : false ;
+      var template = rMemory.template ? rMemory.template : false ;
 
-      room.upgraders = _(foundCreeps).filter({
-        memory: {
-          role: 'upgrader',
-        },
-      }).size();
-      room.memory.upgraders = room.upgraders;
-
-      room.builders = _(foundCreeps).filter({
-        memory: {
-          role: 'builder',
-        },
-      }).size();
-      room.memory.builders = room.builders;
-
-      room.structures = _(foundStructures).size();
-      room.memory.structures = room.structures;
-
-      room.spawns = _(foundSpawns).size();
-      room.memory.spawns = room.spawns;
-
-      room.constructions = _(foundConstructionSites).size();
-      room.memory.constructions = room.constructions;
-
-      // set template according to rooms memory
-      if (!room.memory.template) {
-        room.template = room.memory.template = 'default';
-      } else {
-        room.template = room.memory.template;
+      // wipe first
+      for (var prop in rMemory) {
+        if (rMemory.hasOwnProperty(prop)) {
+          delete rMemory[prop];
+        }
       }
 
-      console.log(JSON.stringify(room.memory));
+      // put things back (or initial set)
+      rMemory.stage    = stage;
+      rMemory.template = template ? template : 'default';
+
+      // set config
+      rMemory.version = global.config.version;
+      rMemory.sources = {};
+
+      // set resources
+      _.forEach(room.find(FIND_SOURCES), (source) => {
+        rMemory.sources[source.id] = source;
+      });
 
     }
 
