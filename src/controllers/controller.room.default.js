@@ -106,7 +106,6 @@ Object.assign(component, {
           return;
         }
 
-        console.log('spawning');
         // create <amount> bigger harvesters
         var amount = 4; // no more than spaces for resource closest tot spawn
         var bp;
@@ -121,9 +120,7 @@ Object.assign(component, {
               spawn.createCreep(bp.body, bp.name, bp.memory);
               return;
             }
-          }
-
-          if (room.energyCapacityAvailable >= 800) {
+          } else if (room.energyCapacityAvailable >= 800) {
             if (room.energyAvailable < 800) {
               return;
             }
