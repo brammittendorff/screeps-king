@@ -19,6 +19,8 @@ Object.assign(component, {
       // initialize once
       if( !room.memory.version || room.memory.version < global.config.version ) {
         this.initRoom(room);
+      } else {
+        this.initRoom(room);
       }
 
     },
