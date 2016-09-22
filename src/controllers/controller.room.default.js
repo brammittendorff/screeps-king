@@ -110,7 +110,7 @@ Object.assign(component, {
         var amount = 4; // no more than spaces for resource closest tot spawn
         var bp;
         var spawn;
-        console.log(JSON.stringify(room.memory));
+        //console.log(JSON.stringify(room.memory));
         if (room.memory.harvesters < amount) {
           if (room.memory.harvesters < 1) {
             // todo: remove this failover using a better function
