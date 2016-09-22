@@ -74,7 +74,7 @@ Object.assign(component, {
         var amount = 3; // no more than spaces for resource closest tot spawn
         var bp;
         var spawn;
-        if (room.harvesters < amount) {
+        if (room.memory.harvesters < amount) {
           bp = global.templates._300harvester;
           spawn = global.go.findAvailableSpawnInRoom(room);
           if (spawn && spawn.canCreateCreep(bp.body, bp.name, bp.memory) == 0) {
@@ -87,7 +87,7 @@ Object.assign(component, {
 
         // create first <amount> upgraders
         amount = 5;
-        if (room.upgraders < amount) {
+        if (room.memory.upgraders < amount) {
           bp = global.templates._300upgrader;
           spawn = global.go.findAvailableSpawnInRoom(room);
           if (spawn && spawn.canCreateCreep(bp.body, bp.name, bp.memory) == 0) {
@@ -101,19 +101,22 @@ Object.assign(component, {
       },
 
       stage1: function (room) {
+
         if (room.energyAvailable < 550) {
           return;
         }
 
+        console.log('spawning');
         // create <amount> bigger harvesters
         var amount = 4; // no more than spaces for resource closest tot spawn
         var bp;
         var spawn;
-        if (room.harvesters < amount) {
-          if (room.harvesters < 1) {
+        if (room.memory.harvesters < amount) {
+          if (room.memory.harvesters < 1) {
             // todo: remove this failover using a better function
             bp = global.templates._300harvester;
             spawn = global.go.findAvailableSpawnInRoom(room);
+
             if (spawn && spawn.canCreateCreep(bp.body, bp.name, bp.memory) == 0) {
               spawn.createCreep(bp.body, bp.name, bp.memory);
               return;
@@ -141,7 +144,7 @@ Object.assign(component, {
 
         // create <amount> bigger upgraders
         amount = 5;
-        if (room.upgraders < amount) {
+        if (room.memory.upgraders < amount) {
           if (room.energyCapacityAvailable >= 1300) {
             if (room.energyAvailable < 1300) {
               return;

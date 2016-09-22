@@ -24,6 +24,8 @@ Object.assign(component, {
       // if new room or new code version, (re)initialize
       if( !room.memory.version || room.memory.version < global.config.version ) {
         this.initRoom(room);
+      } else {
+        this.initRoom(room);
       }
 
       // every tick
