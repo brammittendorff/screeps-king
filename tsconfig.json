@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "es2017",
+    "moduleResolution": "node",
+    "outDir": "dist",
+    "baseUrl": "src/",
+    "sourceMap": true,
+    "strict": false,              // Temporarily turned off for migration
+    "experimentalDecorators": true,
+    "noImplicitAny": false,       // Allow implicit any during migration
+    "noImplicitThis": false,      // Allow implicit this during migration
+    "noImplicitReturns": false,   // Allow implicit returns during migration
+    "allowSyntheticDefaultImports": true,
+    "allowUnreachableCode": true, // Allow unreachable code during migration
+    "paths": {
+      "@/*": ["*"]
+    }
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules"]
+}

@@ -1,7 +1,28 @@
 node_modules/
 npm-debug.log
+*.log
+logs/
 .idea/
 bower_components/
 dist/
 .tern-project
 ScreepsAutocomplete/
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Environment variables - contains sensitive information
+.env
+.env.*
+!.env.example
+
+**/.claude/settings.local.json

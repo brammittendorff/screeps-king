@@ -1,0 +1,78 @@
+image: node:latest
+
+stages:
+  - build
+  - deploy
+
+cache:
+  paths:
+    - node_modules/
+
+.install_dependencies:
+  before_script:
+    - npm ci
+
+build:
+  extends: .install_dependencies
+  stage: build
+  script:
+    - npm run build
+  artifacts:
+    paths:
+      - dist/
+
+lint:
+  extends: .install_dependencies
+  stage: build
+  script:
+    - npm run lint
+
+deploy:main:
+  extends: .install_dependencies
+  stage: deploy
+  script:
+    - npm run deploy
+  only:
+    - master
+  environment:
+    name: production
+  variables:
+    SCREEPS_TOKEN: ${SCREEPS_TOKEN}
+    SCREEPS_BRANCH: "master"
+    SCREEPS_HOST: "screeps.com"
+    SCREEPS_PORT: "443"
+    SCREEPS_PROTOCOL: "https"
+
+deploy:sim:
+  extends: .install_dependencies
+  stage: deploy
+  script:
+    - npm run deploy:sim
+  only:
+    - develop
+  environment:
+    name: simulation
+  variables:
+    SCREEPS_TOKEN: ${SCREEPS_TOKEN}
+    SCREEPS_BRANCH: "sim"
+    SCREEPS_HOST: "screeps.com"
+    SCREEPS_PORT: "443"
+    SCREEPS_PROTOCOL: "https"
+
+# Example for private server deployment
+#deploy:private:
+#  extends: .install_dependencies
+#  stage: deploy
+#  script:
+#    - npm run deploy
+#  only:
+#    - tags
+#  environment:
+#    name: private
+#  variables:
+#    SCREEPS_USERNAME: ${PRIVATE_SERVER_USERNAME}
+#    SCREEPS_PASSWORD: ${PRIVATE_SERVER_PASSWORD}
+#    SCREEPS_BRANCH: "main"
+#    SCREEPS_HOST: "your-private-server"
+#    SCREEPS_PORT: "21025"
+#    SCREEPS_PROTOCOL: "http"

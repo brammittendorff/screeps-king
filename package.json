@@ -2,21 +2,24 @@
   "name": "my-screeps",
   "version": "1.0.0",
   "description": "A screeps repository",
-  "main": "Gruntfile.js",
+  "main": "dist/main.js",
   "dependencies": {
-    "bower": "^1.7.9",
-    "eslint": "^3.5.0",
-    "grunt": "^1.0.1",
-    "grunt-contrib-concat": "^1.0.1",
-    "grunt-contrib-watch": "^1.0.0",
-    "grunt-env": "^0.4.4",
-    "grunt-eslint": "^19.0.0",
-    "grunt-jscs": "^3.0.1",
-    "grunt-screeps": "^1.2.1"
+    "lodash": "^4.17.21"
   },
-  "devDependencies": {},
   "scripts": {
-    "test": "mocha"
+    "test": "mocha",
+    "build": "webpack",
+    "watch": "webpack --watch",
+    "deploy": "webpack && node screeps-api.js",
+    "deploy:sim": "SCREEPS_BRANCH=sim webpack && node screeps-api.js",
+    "logs": "node screeps-console.js",
+    "logs:error": "node screeps-console.js Error",
+    "logs:modules": "node screeps-console.js Modules",
+    "logs:controllers": "node screeps-console.js Controllers",
+    "deploy:watch": "npm run deploy && npm run logs",
+    "lint": "eslint src --ext .ts",
+    "clean": "rm -rf dist",
+    "start": "npm run watch"
   },
   "repository": {
     "type": "git",
@@ -30,5 +33,22 @@
   "bugs": {
     "url": "https://github.com/brammittendorff/my-screeps/issues"
   },
-  "homepage": "https://github.com/brammittendorff/my-screeps#readme"
+  "homepage": "https://github.com/brammittendorff/my-screeps#readme",
+  "devDependencies": {
+    "@babel/core": "^7.27.1",
+    "@babel/preset-env": "^7.27.2",
+    "@types/lodash": "^4.17.16",
+    "@types/node": "^20.17.46",
+    "@types/screeps": "^3.3.8",
+    "babel-loader": "^10.0.0",
+    "copy-webpack-plugin": "^11.0.0",
+    "dotenv": "^16.3.1",
+    "dotenv-webpack": "^8.0.1",
+    "eslint": "^9.26.0",
+    "ts-loader": "^9.5.2",
+    "typescript": "^5.8.3",
+    "webpack": "^5.0.0",
+    "webpack-cli": "^4.0.0",
+    "ws": "^8.18.2"
+  }
 }

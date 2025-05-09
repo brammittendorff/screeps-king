@@ -2,12 +2,11 @@ module.exports = {
   'env': {
     'es6': true,
     'node': true,
+    'commonjs': true
   },
   'extends': 'eslint:recommended',
   'parserOptions': {
-    'ecmaFeatures': {
-      'jsx': true
-    },
+    'ecmaVersion': 8,
     'sourceType': 'module'
   },
   'rules': {
@@ -27,8 +26,8 @@ module.exports = {
         'error',
         'always'
     ],
-    'no-console': 0
-
+    'no-console': 0,
+    'no-unused-vars': ['warn']
   },
   'globals': {
       'BODYPART_COST': true,
@@ -63,6 +62,7 @@ module.exports = {
       'FIND_CONSTRUCTION_SITES': true,
       'FIND_HOSTILE_SPAWNS': true,
       'FIND_DROPPED_ENERGY': true,
+      'FIND_DROPPED_RESOURCES': true,
       'FIND_EXIT': true,
       'FIND_FLAGS': true,
       'FIND_HOSTILE_CREEPS': true,
