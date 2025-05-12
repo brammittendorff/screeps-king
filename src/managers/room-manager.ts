@@ -9,7 +9,18 @@ import { Helpers } from '../utils/helpers';
 import { MemoryManager } from './memory-manager';
 import { CreepManager, CreepRole } from './creep-manager';
 import * as _ from 'lodash';
-import { CONFIG } from '../config/constants';
+import { CONFIG, EXPANSION_CONFIG } from '../config/constants';
+import { MarketTrends } from '../utils/market-trends';
+
+declare global {
+  interface RoomMemory {
+    lastEmergencyNotify?: number;
+    nukeEmergency?: boolean;
+    nukeInfo?: { x: number; y: number; timeToLand: number }[];
+    hostileStats?: { avg: number; count: number };
+    damageStats?: { dealt: number; received: number; count: number };
+  }
+}
 
 export enum RoomStage {
   Initial = 0,
@@ -25,11 +36,31 @@ interface RoomData {
   rcl?: number;
   sources?: { id: Id<Source>, pos: RoomPosition }[];
   minerals?: { id: Id<Mineral>, pos: RoomPosition, mineralType: MineralConstant }[];
+  hostileTime?: number;
+  hostileCount?: number;
+  hostileStructures?: number;
+  expansionScore?: number;
+  owner?: string;
+}
+
+interface RoomMemory {
+  // ... existing code ...
+  lastEmergencyNotify?: number;
 }
 
 export class RoomManager {
   // Track all rooms we own or have visibility of
   private static roomCache: Record<string, RoomData> = {};
+
+  private static readonly MINERAL_SCORES: Record<MineralConstant, number> = {
+    [RESOURCE_CATALYST]: 30,   // X - most valuable
+    [RESOURCE_ZYNTHIUM]: 20,   // Z
+    [RESOURCE_KEANIUM]: 20,    // K
+    [RESOURCE_UTRIUM]: 15,     // U
+    [RESOURCE_LEMERGIUM]: 15,  // L
+    [RESOURCE_HYDROGEN]: 5,    // H - common
+    [RESOURCE_OXYGEN]: 5       // O - common
+  };
 
   /**
    * Initialize room manager
@@ -57,9 +88,50 @@ export class RoomManager {
     // Process owned rooms
     for (const roomName in Game.rooms) {
       const room = Game.rooms[roomName];
-
-      // Skip rooms we don't own
-      if (!room.controller || !room.controller.my) {
+      if (!room.controller) continue;
+      // Emergency mode: if under heavy attack, set emergency flag
+      const hostiles = room.find(FIND_HOSTILE_CREEPS);
+      const criticalRampart = room.find(FIND_STRUCTURES, {
+        filter: s => s.structureType === STRUCTURE_RAMPART && s.hits < CONFIG.DEFENSE.RAMPART_CRITICAL_HITS
+      });
+      // --- Advanced: Boosted hostile detection ---
+      let boostedHostiles = [];
+      let hasBoosted = false;
+      if (CONFIG.DEFENSE.BOOSTED_DETECTION) {
+        boostedHostiles = hostiles.filter(c => c.body.some(part => part.boost));
+        hasBoosted = boostedHostiles.length > 0;
+      }
+      // --- Advanced: Auto safe mode ---
+      if (CONFIG.DEFENSE.AUTO_SAFE_MODE && room.controller && room.controller.my && room.controller.safeModeAvailable) {
+        const criticalTypes = CONFIG.DEFENSE.SAFE_MODE_CRITICAL_STRUCTURES;
+        const criticalStructures = room.find(FIND_MY_STRUCTURES, {
+          filter: s => criticalTypes.includes(s.structureType)
+        });
+        const underAttack = criticalStructures.some(s => hostiles.some(c => c.pos.inRangeTo(s, 1)));
+        if (underAttack && !room.controller.safeMode) {
+          room.controller.activateSafeMode();
+          Logger.error(`[${room.name}] SAFE MODE ACTIVATED: Critical structure under attack!`);
+          Game.notify(`[${room.name}] SAFE MODE ACTIVATED: Critical structure under attack!`);
+        }
+      }
+      // ---
+      const emergency = hostiles.length >= CONFIG.DEFENSE.HOSTILES_THRESHOLD || criticalRampart.length > 0 || hasBoosted;
+      const prevEmergency = room.memory.emergency;
+      room.memory.emergency = emergency;
+      // Throttle notifications
+      if (emergency && (!prevEmergency || !room.memory.lastEmergencyNotify || Game.time - room.memory.lastEmergencyNotify > CONFIG.DEFENSE.NOTIFY_INTERVAL)) {
+        Logger.warn(`[${room.name}] EMERGENCY: Under heavy attack, rampart critical, or boosted enemy detected!`);
+        Game.notify(`[${room.name}] EMERGENCY: Under heavy attack, rampart critical, or boosted enemy detected!`);
+        room.memory.lastEmergencyNotify = Game.time;
+      }
+      // If we just claimed a new room, initialize its memory and build queue
+      if (room.controller.my && (!room.memory.constructionQueue || !room.memory.initialized)) {
+        room.memory.constructionQueue = [];
+        room.memory.initialized = true;
+        Logger.info(`[${room.name}] Initializing new owned room: setting up build queue and planning construction.`);
+        this.planRoomConstruction(room);
+      }
+      if (!room.controller.my) {
         // For rooms we have visibility but don't own, do minimal processing
         this.runNonOwnedRoom(room);
         continue;
@@ -75,6 +147,31 @@ export class RoomManager {
         // Request creeps if needed
         this.requestCreeps(room);
 
+        // --- After requesting creeps, check for non-owned hostile/neutral structures to destroy ---
+        const forbiddenTypes: (StructureConstant | string)[] = [STRUCTURE_ROAD, STRUCTURE_CONTAINER, STRUCTURE_RAMPART, STRUCTURE_WALL, STRUCTURE_CONTROLLER];
+        const foreignStructures = room.find(FIND_STRUCTURES, {
+          filter: s => !forbiddenTypes.includes(s.structureType) && !(s as any).my
+        });
+        if (foreignStructures.length > 0) {
+          const destroyerCount = _.filter(Game.creeps, c => c.memory.role === 'destroyer' && c.memory.homeRoom === room.name).length;
+          if (destroyerCount < 1) {
+            const energy = room.energyCapacityAvailable;
+            const body = CreepManager.getOptimalBody(CreepRole.Destroyer, energy, room);
+            CreepManager.requestCreep({
+              role: CreepRole.Destroyer,
+              body: body,
+              priority: 80,
+              roomName: room.name,
+              memory: {
+                role: CreepRole.Destroyer,
+                homeRoom: room.name,
+                targetRoom: room.name
+              }
+            });
+            Logger.info(`[${room.name}] Requested destroyer to remove foreign structure at (${foreignStructures[0].pos.x},${foreignStructures[0].pos.y}) type=${foreignStructures[0].structureType}`);
+          }
+        }
+
         // Run inter-room resource balancing every 20 ticks
         if (Game.time % 20 === 0) {
           this.balanceRoomResources(room);
@@ -83,6 +180,158 @@ export class RoomManager {
         // Run construction planning every 50 ticks
         if (Game.time % 50 === 0) {
           this.planRoomConstruction(room);
+        }
+
+        // Scan adjacent rooms
+        RoomExplorer.scanAdjacentRooms(room);
+
+        // Expansion: Check for adjacent scouted rooms to claim
+        if (room.memory.adjacentRooms) {
+          for (const adjRoom in room.memory.adjacentRooms) {
+            const adjStatus = room.memory.adjacentRooms[adjRoom].status;
+            // Only claim if scouted, not owned, not reserved, not highway/source keeper, and GCL allows
+            if (adjStatus === 'scouted' &&
+                (!Memory.roomData[adjRoom] || (!Memory.roomData[adjRoom].ownedRoom && !Memory.roomData[adjRoom].reservedRoom)) &&
+                Game.gcl.level > Object.keys(Memory.colony.rooms.owned).length &&
+                !/^.*[0|5]$/.test(adjRoom) && // Avoid highways
+                !/^.*[3|6]$/.test(adjRoom)) {
+              // Request a claimer for this room
+              CreepManager.requestCreep({
+                role: CreepRole.Claimer,
+                body: [CLAIM, MOVE, MOVE, MOVE],
+                priority: 80,
+                roomName: room.name,
+                memory: {
+                  role: CreepRole.Claimer,
+                  homeRoom: room.name,
+                  targetRoom: adjRoom
+                }
+              });
+              Logger.info(`[${room.name}] Requested claimer for adjacent room ${adjRoom}`);
+              // Only request one at a time
+              break;
+            }
+          }
+        }
+
+        // --- Nuke Detection ---
+        const nukes = room.find(FIND_NUKES);
+        if (nukes.length > 0) {
+          if (!room.memory.nukeEmergency || room.memory.nukeEmergency !== true) {
+            Logger.error(`[${room.name}] NUKE INCOMING! Impact(s) in ${nukes.map(n => n.timeToLand).join(', ')} ticks at positions: ${nukes.map(n => `${n.pos.x},${n.pos.y}`).join(' | ')}`);
+            Game.notify(`[${room.name}] NUKE INCOMING! Impact(s) in ${nukes.map(n => n.timeToLand).join(', ')} ticks at positions: ${nukes.map(n => `${n.pos.x},${n.pos.y}`).join(' | ')}`);
+          }
+          room.memory.nukeEmergency = true;
+          room.memory.nukeInfo = nukes.map(n => ({ x: n.pos.x, y: n.pos.y, timeToLand: n.timeToLand }));
+        } else {
+          room.memory.nukeEmergency = false;
+          room.memory.nukeInfo = undefined;
+        }
+        // --- Analytics: Track recent hostile activity ---
+        if (!room.memory.hostileStats) room.memory.hostileStats = { avg: 0, count: 0 };
+        room.memory.hostileStats.avg = (room.memory.hostileStats.avg * room.memory.hostileStats.count + hostiles.length) / (room.memory.hostileStats.count + 1);
+        room.memory.hostileStats.count++;
+        // --- Per-Tick Damage Stats ---
+        if (!room.memory.damageStats) room.memory.damageStats = { dealt: 0, received: 0, count: 0 };
+        let damageDealt = 0;
+        let damageReceived = 0;
+        // Damage dealt: sum of tower attacks
+        const towers = room.find(FIND_MY_STRUCTURES, { filter: s => s.structureType === STRUCTURE_TOWER });
+        for (const tower of towers) {
+          if (tower.store && tower.store.energy > 0) {
+            // Estimate: if a hostile is in range, assume attack
+            const target = tower.pos.findClosestByRange(FIND_HOSTILE_CREEPS);
+            if (target && target.pos.getRangeTo(tower) <= 20) {
+              // Screeps tower damage formula: 600 at range 5, 300 at range 20
+              const range = tower.pos.getRangeTo(target);
+              let dmg = 0;
+              if (range <= 5) dmg = 600;
+              else if (range >= 20) dmg = 150;
+              else dmg = 600 - 30 * (range - 5);
+              damageDealt += dmg;
+            }
+          }
+        }
+        // Damage received: (not tracked for memory optimization)
+        damageReceived = 0;
+        // Log for analytics (keep last 100 entries)
+        room.memory.damageStats.dealt = (room.memory.damageStats.dealt * room.memory.damageStats.count + damageDealt) / (room.memory.damageStats.count + 1);
+        room.memory.damageStats.received = (room.memory.damageStats.received * room.memory.damageStats.count + damageReceived) / (room.memory.damageStats.count + 1);
+        room.memory.damageStats.count++;
+
+        // --- Road Planning: Track planned road positions ---
+        const plannedRoads = new Set<string>();
+        // Only build roads if there are no critical structure construction sites (extensions, towers, storage, etc.)
+        const criticalTypes: (BuildableStructureConstant | string)[] = [STRUCTURE_EXTENSION, STRUCTURE_TOWER, STRUCTURE_STORAGE, STRUCTURE_SPAWN, STRUCTURE_TERMINAL, STRUCTURE_FACTORY, STRUCTURE_LAB, STRUCTURE_LINK];
+        const criticalSites = room.find(FIND_MY_CONSTRUCTION_SITES, { filter: s => (criticalTypes as string[]).includes(s.structureType) });
+        if (criticalSites.length === 0) {
+          // Limit road construction sites to 2 at a time
+          const roadSites = room.find(FIND_MY_CONSTRUCTION_SITES, { filter: s => s.structureType === STRUCTURE_ROAD });
+          if (roadSites.length < 2) {
+            // 1. Essential roads: spawn↔sources, storage↔controller, storage↔sources
+            const spawns = room.find(FIND_MY_SPAWNS);
+            for (const spawn of spawns) {
+              for (const source of room.find(FIND_SOURCES)) {
+                this.ensureRoadBetween(room, spawn.pos, source.pos, plannedRoads);
+                if (_.filter(Game.constructionSites, s => s.room && s.room.name === room.name && s.structureType === STRUCTURE_ROAD).length >= 2) return;
+              }
+            }
+            if (room.storage && room.controller) {
+              this.ensureRoadBetween(room, room.storage.pos, room.controller.pos, plannedRoads);
+              if (_.filter(Game.constructionSites, s => s.room && s.room.name === room.name && s.structureType === STRUCTURE_ROAD).length >= 2) return;
+            }
+            if (room.storage) {
+              for (const source of room.find(FIND_SOURCES)) {
+                this.ensureRoadBetween(room, room.storage.pos, source.pos, plannedRoads);
+                if (_.filter(Game.constructionSites, s => s.room && s.room.name === room.name && s.structureType === STRUCTURE_ROAD).length >= 2) return;
+              }
+            }
+            // 2. Heatmap-based roads (only if no essential roads to build)
+            if (room.memory.roadHeatmap && Game.time % 200 === 0) {
+              const thresholdPlain = 10;
+              const thresholdSwamp = 2;
+              for (const xStr in room.memory.roadHeatmap) {
+                const x = Number(xStr);
+                for (const yStr in room.memory.roadHeatmap[x]) {
+                  const y = Number(yStr);
+                  const value = room.memory.roadHeatmap[x][y];
+                  const terrain = room.getTerrain().get(x, y);
+                  let shouldBuild = false;
+                  if (terrain === TERRAIN_MASK_SWAMP && value >= thresholdSwamp) {
+                    shouldBuild = true;
+                  } else if (terrain !== TERRAIN_MASK_WALL && value >= thresholdPlain) {
+                    shouldBuild = true;
+                  }
+                  if (shouldBuild) {
+                    const pos = new RoomPosition(x, y, room.name);
+                    plannedRoads.add(`${x},${y}`);
+                    const structures = pos.lookFor(LOOK_STRUCTURES);
+                    const hasRoad = structures.some(s => s.structureType === STRUCTURE_ROAD);
+                    const hasSite = pos.lookFor(LOOK_CONSTRUCTION_SITES).some(s => s.structureType === STRUCTURE_ROAD);
+                    if (!hasRoad && !hasSite) {
+                      room.createConstructionSite(x, y, STRUCTURE_ROAD);
+                      if (_.filter(Game.constructionSites, s => s.room && s.room.name === room.name && s.structureType === STRUCTURE_ROAD).length >= 2) return;
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        // --- Build plan aware road cleanup: only remove roads not in plannedRoads and with low heatmap ---
+        if (Game.time % 5000 === 0 && !room.memory.emergency && room.energyAvailable > room.energyCapacityAvailable * 0.5) {
+          if (room.memory.roadHeatmap) {
+            const roads = room.find(FIND_STRUCTURES, { filter: s => s.structureType === STRUCTURE_ROAD });
+            for (const road of roads) {
+              const x = road.pos.x;
+              const y = road.pos.y;
+              const heat = room.memory.roadHeatmap[x]?.[y] || 0;
+              if (heat < 2 && !plannedRoads.has(`${x},${y}`)) {
+                road.destroy();
+                Logger.info(`[${room.name}] Destroyed unused/unplanned road at (${x},${y})`);
+              }
+            }
+          }
         }
       } catch (e) {
         Logger.error(`Error running room ${roomName}: ${(e as Error).message}`);
@@ -246,7 +495,6 @@ export class RoomManager {
   private static runScoutedRoom(room: Room): void {
     // Store room data
     this.roomCache[room.name].lastSeen = Game.time;
-    
     // If this is a potential expansion target (in our expansion list), analyze it more closely
     if (Memory.colony && Memory.colony.expansionTargets && Memory.colony.expansionTargets.includes(room.name)) {
       try {
@@ -254,52 +502,115 @@ export class RoomManager {
         const sources = room.find(FIND_SOURCES);
         const minerals = room.find(FIND_MINERALS);
         const terrain = new Room.Terrain(room.name);
-        
-        // Score the room based on various factors
         let score = 0;
-        
-        // Source count (2 sources = good)
-        score += sources.length * 10;
-        
-        // Mineral types (some are more valuable)
-        for (const mineral of minerals) {
-          switch (mineral.mineralType) {
-            case RESOURCE_HYDROGEN:
-            case RESOURCE_OXYGEN:
-            case RESOURCE_UTRIUM:
-            case RESOURCE_LEMERGIUM:
-            case RESOURCE_KEANIUM:
-            case RESOURCE_ZYNTHIUM:
-            case RESOURCE_CATALYST:
-              score += 5;
-              break;
-            default:
-              score += 2;
-          }
+        // --- Advanced scoring ---
+        // Source count
+        if (sources.length === 2) {
+          score += 20;
+        } else if (sources.length === 1) {
+          score += 5;
         }
-        
-        // Open space analysis (more open terrain = better)
-        let openCount = 0;
-        let wallCount = 0;
-        for (let x = 0; x < 50; x += 10) {
-          for (let y = 0; y < 50; y += 10) {
-            if (terrain.get(x, y) === TERRAIN_MASK_WALL) {
-              wallCount++;
-            } else {
-              openCount++;
+        // --- Mineral logic ---
+        // Gather all minerals already owned (only if extractor is present and working)
+        const ownedMinerals = new Set<string>();
+        for (const ownedRoomName of [...Memory.colony.rooms.owned, ...Memory.colony.rooms.reserved]) {
+          const ownedRoom = Game.rooms[ownedRoomName];
+          if (!ownedRoom) continue;
+          const extractors = ownedRoom.find(FIND_STRUCTURES, { filter: s => s.structureType === STRUCTURE_EXTRACTOR });
+          if (extractors.length === 0) continue; // No extractor, can't mine
+          const extractor = extractors[0] as StructureExtractor;
+          if (extractor && (!extractor.cooldown || extractor.cooldown === 0)) { // Only if extractor is working
+            const ownedMineralsInRoom = ownedRoom.find(FIND_MINERALS);
+            for (const m of ownedMineralsInRoom) {
+              ownedMinerals.add(m.mineralType);
             }
           }
         }
-        
-        // Prefer rooms with more open space
-        score += Math.floor(openCount / 5);
-        
-        // Store the score
-        if (!Memory.roomData[room.name]) {
-          Memory.roomData[room.name] = {} as any;
+        for (const mineral of minerals) {
+          // Base score for any mineral
+          let mineralScore = RoomManager.MINERAL_SCORES[mineral.mineralType] || 5;
+          score += mineralScore;
+          // Bonus for new mineral type
+          if (!ownedMinerals.has(mineral.mineralType)) {
+            score += 20;
+          } else {
+            score += 2; // Small bonus for duplicate
+          }
+          // Bonus if extractor already exists in this room
+          const extractors = room.find(FIND_STRUCTURES, { filter: s => s.structureType === STRUCTURE_EXTRACTOR });
+          if (extractors.length > 0) {
+            score += 10;
+          }
+          // Penalize if mineral is on cooldown (recently mined out)
+          if (mineral.ticksToRegeneration && mineral.ticksToRegeneration > 0) {
+            score -= 10;
+          }
+          // --- Market price logic (real-time trend) ---
+          const { price, trend } = MarketTrends.get(mineral.mineralType);
+          if (trend > 50) score += EXPANSION_CONFIG.weights.mineralMarketHigh;
+          else if (trend > 10) score += EXPANSION_CONFIG.weights.mineralMarketMed;
+          else if (trend < -10) score += EXPANSION_CONFIG.weights.mineralMarketLow;
         }
+        // Proximity to owned rooms (closer = better)
+        let minDist = 10;
+        for (const owned of Memory.colony.rooms.owned) {
+          const dist = Game.map.getRoomLinearDistance(room.name, owned);
+          if (dist < minDist) minDist = dist;
+        }
+        score += Math.max(0, 10 - minDist); // +10 for adjacent, less for farther
+        // Open terrain
+        let openCount = 0, wallCount = 0, swampCount = 0;
+        for (let x = 0; x < 50; x += 10) {
+          for (let y = 0; y < 50; y += 10) {
+            const t = terrain.get(x, y);
+            if (t === TERRAIN_MASK_WALL) wallCount++;
+            else if (t === TERRAIN_MASK_SWAMP) swampCount++;
+            else openCount++;
+          }
+        }
+        score += Math.floor(openCount / 5);
+        score -= swampCount * 2;
+        // Hostile structures
+        const hostiles = room.find(FIND_HOSTILE_STRUCTURES);
+        if (hostiles.length > 0) score -= 20;
+        // Hostile reservation/ownership
+        if (room.controller && room.controller.owner && !room.controller.my) score -= 100;
+        if (room.controller && room.controller.reservation && room.controller.reservation.username !== Memory.username) score -= 100;
+        // Source keeper/highway
+        if (/^[WE][0-9][3|6][NS][0-9][3|6]$/.test(room.name)) score -= 50; // source keeper
+        if (/^[WE][0-9]*0[NS][0-9]*0$/.test(room.name)) score -= 50; // highway
+        // --- Enemy empire analysis, map features, and sector/region targeting ---
+        const exits = Game.map.describeExits(room.name);
+        const topEnemies = Memory.topEnemies || [];
+        let strongEnemyNearby = false;
+        let connectsRooms = 0;
+        for (const dir in exits) {
+          const adjRoomName = exits[dir];
+          const adjRoomData = Memory.roomData[adjRoomName];
+          if (adjRoomData && adjRoomData.owner && topEnemies.includes(adjRoomData.owner)) {
+            strongEnemyNearby = true;
+          }
+          if (adjRoomData && ((adjRoomData.hostileCount && adjRoomData.hostileCount > 5) || (adjRoomData.hostileStructures && adjRoomData.hostileStructures > 2))) {
+            strongEnemyNearby = true;
+          }
+          if (Memory.colony.rooms.owned.includes(adjRoomName)) connectsRooms++;
+        }
+        if (strongEnemyNearby) score -= EXPANSION_CONFIG.weights.enemyStrong;
+        if (connectsRooms >= 2) score += EXPANSION_CONFIG.weights.connectsRooms;
+        // Penalty for border/highway rooms
+        if (/^[WE][0-9]*0[NS][0-9]*0$/.test(room.name)) score += EXPANSION_CONFIG.weights.highway;
+        if (/^[WE]0[NS]|[NS]0[WE]/.test(room.name)) score += EXPANSION_CONFIG.weights.border;
+        // --- Sector/region targeting and preferences ---
+        const sector = room.name.match(/[WE][0-9]+[NS][0-9]+/)[0];
+        if (EXPANSION_CONFIG.preferredSectors.includes(sector)) {
+          score += EXPANSION_CONFIG.weights.sector;
+        }
+        if (EXPANSION_CONFIG.blacklistedSectors.includes(sector)) {
+          score += EXPANSION_CONFIG.weights.sectorFar;
+        }
+        // Store the score
+        if (!Memory.roomData[room.name]) Memory.roomData[room.name] = {} as any;
         Memory.roomData[room.name].expansionScore = score;
-        
         Logger.info(`Scouted expansion target ${room.name}: score ${score}, sources: ${sources.length}, minerals: ${minerals.length}`);
       } catch (e) {
         Logger.error(`Error analyzing scouted room ${room.name}: ${e}`);
@@ -462,53 +773,272 @@ export class RoomManager {
     if (room.memory.constructionQueue.length > 0) return;
     const constructionSites = _.filter(Game.constructionSites, site => site.room && site.room.name === room.name);
     if (constructionSites.length >= 10) return;
-    // Plan extensions
-    if (room.controller.level >= 2) {
-      const extensions = room.find(FIND_MY_STRUCTURES, { filter: { structureType: STRUCTURE_EXTENSION } });
-      const maxExtensions = CONTROLLER_STRUCTURES[STRUCTURE_EXTENSION][room.controller.level];
-      const needed = maxExtensions - extensions.length;
-      if (needed > 0) {
-        const best = this.findBestExtensionCluster(room, needed);
-        for (const pos of best) {
-          room.memory.constructionQueue.push({x: pos.x, y: pos.y, structureType: STRUCTURE_EXTENSION});
+    const rcl = room.controller?.level || 0;
+    // --- 1. Containers near sources and controller ---
+    const sources = room.find(FIND_SOURCES);
+    const containers = room.find(FIND_STRUCTURES, { filter: s => s.structureType === STRUCTURE_CONTAINER });
+    const containerSites = room.find(FIND_MY_CONSTRUCTION_SITES, { filter: s => s.structureType === STRUCTURE_CONTAINER });
+    // Place container near each source
+    for (const source of sources) {
+      const nearContainer = containers.some(c => c.pos.getRangeTo(source.pos) <= 2);
+      const nearContainerSite = containerSites.some(c => c.pos.getRangeTo(source.pos) <= 2);
+      if (!nearContainer && !nearContainerSite) {
+        const pos = this.findContainerSpotNear(room, source.pos);
+        if (pos) room.createConstructionSite(pos, STRUCTURE_CONTAINER);
+      }
+    }
+    // Place container near controller
+    if (room.controller) {
+      const nearContainer = containers.some(c => c.pos.getRangeTo(room.controller!.pos) <= 2);
+      const nearContainerSite = containerSites.some(c => c.pos.getRangeTo(room.controller!.pos) <= 2);
+      if (!nearContainer && !nearContainerSite) {
+        const pos = this.findContainerSpotNear(room, room.controller.pos);
+        if (pos) room.createConstructionSite(pos, STRUCTURE_CONTAINER);
+      }
+    }
+    // --- 2. Links (RCL 5+) ---
+    if (rcl >= 5) {
+      const links = room.find(FIND_STRUCTURES, { filter: s => s.structureType === STRUCTURE_LINK });
+      const linkSites = room.find(FIND_MY_CONSTRUCTION_SITES, { filter: s => s.structureType === STRUCTURE_LINK });
+      const maxLinks = [0,0,0,0,0,2,3,4,6][rcl] || 0;
+      let placed = links.length + linkSites.length;
+      for (const source of sources) {
+        if (placed >= maxLinks) break;
+        const nearLink = links.some(l => l.pos.getRangeTo(source.pos) <= 2);
+        const nearLinkSite = linkSites.some(l => l.pos.getRangeTo(source.pos) <= 2);
+        if (!nearLink && !nearLinkSite) {
+          const pos = this.findContainerSpotNear(room, source.pos);
+          if (pos) { room.createConstructionSite(pos, STRUCTURE_LINK); placed++; }
         }
-        if (best.length > 0) {
-          Logger.info(`Planned ${best.length} extensions in ${room.name} (build queue)`);
+      }
+      // Place link near storage
+      if (room.storage && placed < maxLinks) {
+        const nearLink = links.some(l => l.pos.getRangeTo(room.storage!.pos) <= 2);
+        const nearLinkSite = linkSites.some(l => l.pos.getRangeTo(room.storage!.pos) <= 2);
+        if (!nearLink && !nearLinkSite) {
+          const pos = this.findContainerSpotNear(room, room.storage.pos);
+          if (pos) { room.createConstructionSite(pos, STRUCTURE_LINK); placed++; }
+        }
+      }
+      // Place link near controller
+      if (room.controller && placed < maxLinks) {
+        const nearLink = links.some(l => l.pos.getRangeTo(room.controller!.pos) <= 2);
+        const nearLinkSite = linkSites.some(l => l.pos.getRangeTo(room.controller!.pos) <= 2);
+        if (!nearLink && !nearLinkSite) {
+          const pos = this.findContainerSpotNear(room, room.controller.pos);
+          if (pos) { room.createConstructionSite(pos, STRUCTURE_LINK); placed++; }
         }
       }
     }
-    // Plan towers
-    if (room.controller.level >= 3) {
-      const towers = room.find(FIND_MY_STRUCTURES, { filter: { structureType: STRUCTURE_TOWER } });
-      const towerSites = room.find(FIND_MY_CONSTRUCTION_SITES, { filter: s => s.structureType === STRUCTURE_TOWER });
-      const maxTowers = CONTROLLER_STRUCTURES[STRUCTURE_TOWER][room.controller.level];
-      const neededTowers = maxTowers - towers.length - towerSites.length;
-      if (neededTowers > 0) {
-        // Find best open cluster, but avoid overlap with planned extensions
-        const plannedExts = new Set(room.memory.constructionQueue.filter(q => q.structureType === STRUCTURE_EXTENSION).map(q => `${q.x},${q.y}`));
-        const best = this.findBestExtensionCluster(room, neededTowers * 2); // Get more candidates
-        let planned = 0;
-        for (const pos of best) {
-          if (planned >= neededTowers) break;
-          if (!plannedExts.has(`${pos.x},${pos.y}`)) {
-            room.memory.constructionQueue.push({x: pos.x, y: pos.y, structureType: STRUCTURE_TOWER});
-            planned++;
+    // --- 3. Labs, Terminal, Factory (RCL 6+) ---
+    if (rcl >= 6) {
+      // Labs
+      const labs = room.find(FIND_STRUCTURES, { filter: s => s.structureType === STRUCTURE_LAB });
+      const labSites = room.find(FIND_MY_CONSTRUCTION_SITES, { filter: s => s.structureType === STRUCTURE_LAB });
+      const maxLabs = [0,0,0,0,0,0,3,6,10][rcl] || 0;
+      let placedLabs = labs.length + labSites.length;
+      for (let i = placedLabs; i < maxLabs; i++) {
+        const pos = this.findLabSpot(room);
+        if (pos) room.createConstructionSite(pos, STRUCTURE_LAB);
+      }
+      // Terminal
+      const terminals = room.find(FIND_STRUCTURES, { filter: s => s.structureType === STRUCTURE_TERMINAL });
+      const terminalSites = room.find(FIND_MY_CONSTRUCTION_SITES, { filter: s => s.structureType === STRUCTURE_TERMINAL });
+      if (terminals.length + terminalSites.length < 1) {
+        const pos = this.findNearStorage(room);
+        if (pos) room.createConstructionSite(pos, STRUCTURE_TERMINAL);
+      }
+      // Factory
+      const factories = room.find(FIND_STRUCTURES, { filter: s => s.structureType === STRUCTURE_FACTORY });
+      const factorySites = room.find(FIND_MY_CONSTRUCTION_SITES, { filter: s => s.structureType === STRUCTURE_FACTORY });
+      if (factories.length + factorySites.length < 1) {
+        const pos = this.findNearStorage(room);
+        if (pos) room.createConstructionSite(pos, STRUCTURE_FACTORY);
+      }
+    }
+    // --- 4. Defensive structures: ramparts and walls ---
+    // Place ramparts on all spawns, storage, terminal, towers, and controller
+    const rampartTargets = [
+      ...room.find(FIND_MY_SPAWNS),
+      ...(room.storage ? [room.storage] : []),
+      ...(room.terminal ? [room.terminal] : []),
+      ...room.find(FIND_MY_STRUCTURES, { filter: s => s.structureType === STRUCTURE_TOWER }),
+      ...(room.controller ? [room.controller] : [])
+    ];
+    const ramparts = room.find(FIND_STRUCTURES, { filter: s => s.structureType === STRUCTURE_RAMPART });
+    const rampartSites = room.find(FIND_MY_CONSTRUCTION_SITES, { filter: s => s.structureType === STRUCTURE_RAMPART });
+    for (const target of rampartTargets) {
+      const hasRampart = ramparts.some(r => r.pos.isEqualTo(target.pos));
+      const hasRampartSite = rampartSites.some(r => r.pos.isEqualTo(target.pos));
+      if (!hasRampart && !hasRampartSite) room.createConstructionSite(target.pos, STRUCTURE_RAMPART);
+    }
+    // Place walls at room exits
+    const exits = Game.map.describeExits(room.name);
+    for (const dir in exits) {
+      const exitRoom = exits[dir];
+      for (let x = 1; x < 49; x++) {
+        for (let y = 1; y < 49; y++) {
+          if (room.getPositionAt(x, y)?.lookFor(LOOK_TERRAIN)[0] === 'plain') {
+            if (x === 1 || x === 48 || y === 1 || y === 48) {
+              const hasWall = room.find(FIND_STRUCTURES, { filter: s => s.structureType === STRUCTURE_WALL && s.pos.x === x && s.pos.y === y }).length > 0;
+              const hasWallSite = room.find(FIND_MY_CONSTRUCTION_SITES, { filter: s => s.structureType === STRUCTURE_WALL && s.pos.x === x && s.pos.y === y }).length > 0;
+              if (!hasWall && !hasWallSite) room.createConstructionSite(x, y, STRUCTURE_WALL);
+            }
           }
         }
-        if (planned > 0) {
-          Logger.info(`Planned ${planned} towers in ${room.name} (build queue)`);
+      }
+    }
+    // --- Road Planning: Track planned road positions ---
+    const plannedRoads = new Set<string>();
+    // Only build roads if there are no critical structure construction sites (extensions, towers, storage, etc.)
+    const criticalTypes: (BuildableStructureConstant | string)[] = [STRUCTURE_EXTENSION, STRUCTURE_TOWER, STRUCTURE_STORAGE, STRUCTURE_SPAWN, STRUCTURE_TERMINAL, STRUCTURE_FACTORY, STRUCTURE_LAB, STRUCTURE_LINK];
+    const criticalSites = constructionSites.filter(site => (criticalTypes as string[]).includes(site.structureType));
+    if (criticalSites.length === 0) {
+      // Limit road construction sites to 2 at a time
+      const roadSites = constructionSites.filter(site => site.structureType === STRUCTURE_ROAD);
+      if (roadSites.length < 2) {
+        // 1. Essential roads: spawn↔sources, storage↔controller, storage↔sources
+        const spawns = room.find(FIND_MY_SPAWNS);
+        for (const spawn of spawns) {
+          for (const source of sources) {
+            this.ensureRoadBetween(room, spawn.pos, source.pos, plannedRoads);
+            if (_.filter(Game.constructionSites, s => s.room && s.room.name === room.name && s.structureType === STRUCTURE_ROAD).length >= 2) return;
+          }
+        }
+        if (room.storage && room.controller) {
+          this.ensureRoadBetween(room, room.storage.pos, room.controller.pos, plannedRoads);
+          if (_.filter(Game.constructionSites, s => s.room && s.room.name === room.name && s.structureType === STRUCTURE_ROAD).length >= 2) return;
+        }
+        if (room.storage) {
+          for (const source of sources) {
+            this.ensureRoadBetween(room, room.storage.pos, source.pos, plannedRoads);
+            if (_.filter(Game.constructionSites, s => s.room && s.room.name === room.name && s.structureType === STRUCTURE_ROAD).length >= 2) return;
+          }
+        }
+        // 2. Heatmap-based roads (only if no essential roads to build)
+        if (room.memory.roadHeatmap && Game.time % 200 === 0) {
+          const thresholdPlain = 10;
+          const thresholdSwamp = 2;
+          for (const xStr in room.memory.roadHeatmap) {
+            const x = Number(xStr);
+            for (const yStr in room.memory.roadHeatmap[x]) {
+              const y = Number(yStr);
+              const value = room.memory.roadHeatmap[x][y];
+              const terrain = room.getTerrain().get(x, y);
+              let shouldBuild = false;
+              if (terrain === TERRAIN_MASK_SWAMP && value >= thresholdSwamp) {
+                shouldBuild = true;
+              } else if (terrain !== TERRAIN_MASK_WALL && value >= thresholdPlain) {
+                shouldBuild = true;
+              }
+              if (shouldBuild) {
+                const pos = new RoomPosition(x, y, room.name);
+                plannedRoads.add(`${x},${y}`);
+                const structures = pos.lookFor(LOOK_STRUCTURES);
+                const hasRoad = structures.some(s => s.structureType === STRUCTURE_ROAD);
+                const hasSite = pos.lookFor(LOOK_CONSTRUCTION_SITES).some(s => s.structureType === STRUCTURE_ROAD);
+                if (!hasRoad && !hasSite) {
+                  room.createConstructionSite(x, y, STRUCTURE_ROAD);
+                  if (_.filter(Game.constructionSites, s => s.room && s.room.name === room.name && s.structureType === STRUCTURE_ROAD).length >= 2) return;
+                }
+              }
+            }
+          }
         }
       }
     }
-    // Plan storage
-    if (room.controller.level >= 4 && !room.storage) {
-      const storageSites = room.find(FIND_MY_CONSTRUCTION_SITES, { filter: s => s.structureType === STRUCTURE_STORAGE });
-      if (storageSites.length === 0) {
-        // Place storage in the largest open cluster near spawn
-        const best = this.findBestExtensionCluster(room, 1);
-        if (best.length > 0) {
-          room.memory.constructionQueue.push({x: best[0].x, y: best[0].y, structureType: STRUCTURE_STORAGE});
-          Logger.info(`Planned storage at (${best[0].x},${best[0].y}) in ${room.name} (build queue)`);
+    // --- Build plan aware road cleanup: only remove roads not in plannedRoads and with low heatmap ---
+    if (Game.time % 5000 === 0 && !room.memory.emergency && room.energyAvailable > room.energyCapacityAvailable * 0.5) {
+      if (room.memory.roadHeatmap) {
+        const roads = room.find(FIND_STRUCTURES, { filter: s => s.structureType === STRUCTURE_ROAD });
+        for (const road of roads) {
+          const x = road.pos.x;
+          const y = road.pos.y;
+          const heat = room.memory.roadHeatmap[x]?.[y] || 0;
+          if (heat < 2 && !plannedRoads.has(`${x},${y}`)) {
+            road.destroy();
+            Logger.info(`[${room.name}] Destroyed unused/unplanned road at (${x},${y})`);
+          }
+        }
+      }
+    }
+  }
+
+  // --- Helper: Find a spot for a container near a pos ---
+  private static findContainerSpotNear(room: Room, pos: RoomPosition): RoomPosition | null {
+    for (const dx of [-1,0,1]) {
+      for (const dy of [-1,0,1]) {
+        if (dx === 0 && dy === 0) continue;
+        const x = pos.x + dx;
+        const y = pos.y + dy;
+        if (x < 1 || x > 48 || y < 1 || y > 48) continue;
+        const look = room.lookForAt(LOOK_STRUCTURES, x, y);
+        if (look.length === 0 && room.lookForAt(LOOK_TERRAIN, x, y)[0] !== 'wall') {
+          return new RoomPosition(x, y, room.name);
+        }
+      }
+    }
+    return null;
+  }
+  // --- Helper: Find a spot for a lab (simple: near storage or center) ---
+  private static findLabSpot(room: Room): RoomPosition | null {
+    if (room.storage) {
+      for (const dx of [-2,-1,0,1,2]) {
+        for (const dy of [-2,-1,0,1,2]) {
+          const x = room.storage.pos.x + dx;
+          const y = room.storage.pos.y + dy;
+          if (x < 1 || x > 48 || y < 1 || y > 48) continue;
+          const look = room.lookForAt(LOOK_STRUCTURES, x, y);
+          if (look.length === 0 && room.lookForAt(LOOK_TERRAIN, x, y)[0] !== 'wall') {
+            return new RoomPosition(x, y, room.name);
+          }
+        }
+      }
+    }
+    return new RoomPosition(25, 25, room.name);
+  }
+  // --- Helper: Find a spot near storage ---
+  private static findNearStorage(room: Room): RoomPosition | null {
+    if (room.storage) {
+      for (const dx of [-1,0,1]) {
+        for (const dy of [-1,0,1]) {
+          const x = room.storage.pos.x + dx;
+          const y = room.storage.pos.y + dy;
+          if (x < 1 || x > 48 || y < 1 || y > 48) continue;
+          const look = room.lookForAt(LOOK_STRUCTURES, x, y);
+          if (look.length === 0 && room.lookForAt(LOOK_TERRAIN, x, y)[0] !== 'wall') {
+            return new RoomPosition(x, y, room.name);
+          }
+        }
+      }
+    }
+    return null;
+  }
+  // --- Helper: Ensure a road exists along the path between two positions ---
+  private static ensureRoadBetween(room: Room, from: RoomPosition, to: RoomPosition, plannedRoads?: Set<string>): void {
+    const path = room.findPath(from, to, { ignoreCreeps: true, range: 1 });
+    for (const step of path) {
+      const x = step.x;
+      const y = step.y;
+      const pos = new RoomPosition(x, y, room.name);
+      const terrain = room.getTerrain().get(x, y);
+      if (terrain !== TERRAIN_MASK_WALL) {
+        if (plannedRoads) plannedRoads.add(`${x},${y}`);
+        const structures = pos.lookFor(LOOK_STRUCTURES);
+        const hasRoad = structures.some(s => s.structureType === STRUCTURE_ROAD);
+        const hasSite = pos.lookFor(LOOK_CONSTRUCTION_SITES).some(s => s.structureType === STRUCTURE_ROAD);
+        // --- Swamp prioritization: always build road on swamp, regardless of heatmap or traffic ---
+        if (terrain === TERRAIN_MASK_SWAMP) {
+          if (!hasRoad && !hasSite) {
+            room.createConstructionSite(x, y, STRUCTURE_ROAD);
+            if (_.filter(Game.constructionSites, s => s.room && s.room.name === room.name && s.structureType === STRUCTURE_ROAD).length >= 2) return;
+          }
+        } else {
+          // For plains, keep existing logic
+          if (!hasRoad && !hasSite) {
+            room.createConstructionSite(x, y, STRUCTURE_ROAD);
+            if (_.filter(Game.constructionSites, s => s.room && s.room.name === room.name && s.structureType === STRUCTURE_ROAD).length >= 2) return;
+          }
         }
       }
     }
@@ -523,7 +1053,7 @@ export class RoomManager {
     const spawns = room.find(FIND_MY_SPAWNS);
     const extensions = room.find(FIND_MY_STRUCTURES, { filter: s => s.structureType === STRUCTURE_EXTENSION });
     const extensionSites = room.find(FIND_MY_CONSTRUCTION_SITES, { filter: s => s.structureType === STRUCTURE_EXTENSION });
-    Logger.info(`[${room.name}] Controller: level=${controller?.level}, progress=${controller?.progress}/${controller?.progressTotal}, owned=${controller?.my}`);
+    Logger.info(`[${room.name}] Controller: level=${controller?.level}, progress=${controller?.progress}/${controller?.progressTotal}${controller && controller.progressTotal ? ` (${((controller.progress / controller.progressTotal) * 100).toFixed(1)}%)` : ''}, owned=${controller?.my}`);
     Logger.info(`[${room.name}] Spawns: built=${spawns.length}`);
     Logger.info(`[${room.name}] Extensions: built=${extensions.length}, constructionSites=${extensionSites.length}`);
 
@@ -619,116 +1149,19 @@ export class RoomManager {
    * Request creeps based on room needs (expert, dynamic, config-driven)
    */
   private static requestCreeps(room: Room): void {
-    // Get counts from memory (updated by MemoryManager)
-    const harvesterCount = room.memory.harvesters || 0;
-    const upgraderCount = room.memory.upgraders || 0;
-    const builderCount = _.filter(Game.creeps, c =>
-      c.memory.role === CreepRole.Builder &&
-      c.memory.homeRoom === room.name
-    ).length;
-
-    // Get RCL (controller level), fallback to 1 if missing
-    const rcl = room.controller ? room.controller.level : 1;
-    // Get desired numbers from config, fallback to safe defaults
-    const maxHarvesters = CONFIG.ROOM.DESIRED_HARVESTERS[rcl] ?? 1;
-    const maxUpgraders = CONFIG.ROOM.DESIRED_UPGRADERS[rcl] ?? 1;
-    const maxBuilders = CONFIG.ROOM.DESIRED_BUILDERS[rcl] ?? 0;
-
-    // Emergency: If controller is at risk of downgrading, always spawn at least 1 upgrader
-    const controller = room.controller;
-    const controllerAtRisk = controller && controller.my && controller.ticksToDowngrade < 2000;
-    const needEmergencyUpgrader = controllerAtRisk && upgraderCount === 0;
-
-    // 1. Always prioritize at least 1 harvester if there are none
-    if (harvesterCount === 0) {
-      const energy = room.energyCapacityAvailable;
-      const body = CreepManager.getOptimalBody(CreepRole.Harvester, energy);
-      CreepManager.requestCreep({
-        role: CreepRole.Harvester,
-        body: body,
-        priority: 100, // Highest priority
-        roomName: room.name,
-        memory: {
-          role: CreepRole.Harvester
-        }
-      });
-      // Don't spawn anything else until we have a harvester
-      return;
+    // Build profiles (CPU-efficient)
+    const roomProfile = CreepManager.buildRoomProfile(room);
+    // For empireProfile, only build once per tick and cache globally (to save CPU)
+    if (!global._empireProfile || global._empireProfileTick !== Game.time) {
+      global._empireProfile = CreepManager.buildEmpireProfile();
+      global._empireProfileTick = Game.time;
     }
-
-    // 2. Emergency upgrader if controller is at risk
-    if (needEmergencyUpgrader) {
-      const energy = room.energyCapacityAvailable;
-      const body = CreepManager.getOptimalBody(CreepRole.Upgrader, energy);
-      CreepManager.requestCreep({
-        role: CreepRole.Upgrader,
-        body: body,
-        priority: 99, // Just below emergency harvester
-        roomName: room.name,
-        memory: {
-          role: CreepRole.Upgrader
-        }
-      });
+    const empireProfile = global._empireProfile as ReturnType<typeof CreepManager.buildEmpireProfile>;
+    // Get creep requests from the generic planner
+    const requests = CreepManager.planCreeps(roomProfile, empireProfile);
+    for (const req of requests) {
+      CreepManager.requestCreep(req);
     }
-
-    // 3. Spawn harvesters up to config max
-    if (harvesterCount < maxHarvesters) {
-      const energy = room.energyCapacityAvailable;
-      const body = CreepManager.getOptimalBody(CreepRole.Harvester, energy);
-      CreepManager.requestCreep({
-        role: CreepRole.Harvester,
-        body: body,
-        priority: 90, // High priority
-        roomName: room.name,
-        memory: {
-          role: CreepRole.Harvester
-        }
-      });
-    }
-
-    // 4. Spawn upgraders up to config max (if at least 1 harvester exists)
-    //    (or more if emergency)
-    if ((upgraderCount < maxUpgraders && harvesterCount > 0) || needEmergencyUpgrader) {
-      const energy = room.energyCapacityAvailable;
-      const body = CreepManager.getOptimalBody(CreepRole.Upgrader, energy);
-      CreepManager.requestCreep({
-        role: CreepRole.Upgrader,
-        body: body,
-        priority: 70, // Medium priority
-        roomName: room.name,
-        memory: {
-          role: CreepRole.Upgrader
-        }
-      });
-    }
-
-    // 5. Spawn builders up to config max (if at least 1 harvester exists)
-    //    Only if there is work to do
-    if (builderCount < maxBuilders && harvesterCount > 0) {
-      const constructionSites = room.find(FIND_MY_CONSTRUCTION_SITES);
-      const damagedStructures = room.find(FIND_STRUCTURES, {
-        filter: structure => structure.hits < structure.hitsMax * 0.75
-      });
-      if (constructionSites.length > 0 || damagedStructures.length > 0) {
-        const energy = room.energyCapacityAvailable;
-        const body = CreepManager.getOptimalBody(CreepRole.Builder, energy);
-        CreepManager.requestCreep({
-          role: CreepRole.Builder,
-          body: body,
-          priority: 60, // Medium-low priority
-          roomName: room.name,
-          memory: {
-            role: CreepRole.Builder,
-            homeRoom: room.name
-          }
-        });
-      }
-    }
-
-    Logger.info(`[${room.name}] RCL: ${rcl}, Harvesters: ${harvesterCount}/${maxHarvesters}, Upgraders: ${upgraderCount}/${maxUpgraders}, Builders: ${builderCount}/${maxBuilders}`);
-
-    const myCreeps = _.filter(Game.creeps, c => c.memory.role === 'harvester' && c.memory.homeRoom === room.name);
-    Logger.info(`[${room.name}] Harvester names: ${myCreeps.map(c => c.name).join(', ')}`);
   }
   
   /**
@@ -739,14 +1172,47 @@ export class RoomManager {
     const towers = room.find<StructureTower>(FIND_MY_STRUCTURES, {
       filter: (s) => s.structureType === STRUCTURE_TOWER
     });
-    
     // Skip if no towers
     if (towers.length === 0) return;
-    
     // Run tower logic for each tower
     for (const tower of towers) {
       if (global.ai.tower && global.ai.tower.routine) {
         global.ai.tower.routine(tower);
+      } else {
+        // Fallback: attack hostiles, heal friendlies, repair ramparts
+        let target: Creep | null = null;
+        if (CONFIG.DEFENSE.BOOSTED_DETECTION && room.find(FIND_HOSTILE_CREEPS).some(c => c.body.some(part => part.boost))) {
+          // Focus fire on boosted hostile
+          target = tower.pos.findClosestByRange(FIND_HOSTILE_CREEPS, {
+            filter: c => c.body.some(part => part.boost)
+          });
+        }
+        if (!target) {
+          // Focus on highest attack/ranged/heal hostile
+          target = tower.pos.findClosestByRange(FIND_HOSTILE_CREEPS, {
+            filter: c => c.getActiveBodyparts(ATTACK) + c.getActiveBodyparts(RANGED_ATTACK) + c.getActiveBodyparts(HEAL) > 0
+          });
+        }
+        if (!target) {
+          target = tower.pos.findClosestByRange(FIND_HOSTILE_CREEPS);
+        }
+        if (target) {
+          tower.attack(target);
+          continue;
+        }
+        const closestHurt = tower.pos.findClosestByRange(FIND_MY_CREEPS, {
+          filter: c => c.hits < c.hitsMax
+        });
+        if (closestHurt) {
+          tower.heal(closestHurt);
+          continue;
+        }
+        const weakRampart = tower.pos.findClosestByRange(FIND_STRUCTURES, {
+          filter: s => s.structureType === STRUCTURE_RAMPART && s.hits < CONFIG.DEFENSE.RAMPART_CRITICAL_HITS * 2
+        });
+        if (weakRampart) {
+          tower.repair(weakRampart);
+        }
       }
     }
   }
@@ -782,5 +1248,36 @@ export class RoomManager {
       reservedRoom: false,
       lastSeen: 0
     };
+  }
+}
+
+/**
+ * RoomExplorer: Scans adjacent rooms and records their status in memory
+ */
+export class RoomExplorer {
+  /**
+   * Scan exits of a room and update memory with adjacent room info
+   */
+  public static scanAdjacentRooms(room: Room): void {
+    if (!room.memory.adjacentRooms) room.memory.adjacentRooms = {};
+    const exits = Game.map.describeExits(room.name);
+    for (const dir in exits) {
+      const adjacentRoom = exits[dir];
+      if (!room.memory.adjacentRooms[adjacentRoom]) {
+        room.memory.adjacentRooms[adjacentRoom] = { status: 'unexplored' };
+      }
+    }
+  }
+
+  /**
+   * Update memory for an adjacent room after scouting
+   */
+  public static updateRoomStatus(roomName: string, status: string): void {
+    for (const myRoomName in Game.rooms) {
+      const myRoom = Game.rooms[myRoomName];
+      if (myRoom.memory.adjacentRooms && myRoom.memory.adjacentRooms[roomName]) {
+        myRoom.memory.adjacentRooms[roomName].status = status;
+      }
+    }
   }
 }

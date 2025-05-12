@@ -367,8 +367,43 @@ export class ColonyManager {
    * Plan colony expansion
    */
   private static planExpansion(): void {
+    // --- Dynamic Expansion Pausing ---
+    // Pause if any owned room is under attack (recent hostiles)
+    let underAttack = false;
+    for (const roomName of this.roomsByType.owned) {
+      const roomData = Memory.roomData[roomName];
+      if (roomData && roomData.hostileTime && Game.time - roomData.hostileTime < 1000) {
+        underAttack = true;
+        break;
+      }
+    }
+    // Pause if average storage energy is low
+    let totalEnergy = 0, storageRooms = 0;
+    for (const roomName of this.roomsByType.owned) {
+      const room = Game.rooms[roomName];
+      if (room && room.storage) {
+        totalEnergy += room.storage.store[RESOURCE_ENERGY] || 0;
+        storageRooms++;
+      }
+    }
+    const avgEnergy = storageRooms > 0 ? totalEnergy / storageRooms : 0;
+    // Pause if a room was lost in the last 10,000 ticks (roomData missing but was owned)
+    let recentlyLostRoom = false;
+    if (Memory.colony && Memory.colony.lostRooms) {
+      for (const lost of Memory.colony.lostRooms) {
+        if (Game.time - lost.time < 10000) {
+          recentlyLostRoom = true;
+          break;
+        }
+      }
+    }
+    if (underAttack || avgEnergy < 10000 || recentlyLostRoom) {
+      Logger.info('Expansion paused: under attack, low energy, or recently lost a room.');
+      return;
+    }
+
     // Only proceed if we have room for expansion (up to 4 rooms)
-    if (this.roomsByType.owned.length >= 4) return;
+    if (this.roomsByType.owned.length >= Game.gcl.level) return;
 
     // Check if we're ready to expand (all current rooms at RCL 4+)
     let readyToExpand = true;
@@ -413,7 +448,7 @@ export class ColonyManager {
     }
 
     // Find new potential expansion targets
-    const potentialTargets: { roomName: string, score: number }[] = [];
+    const potentialTargets: { roomName: string, score: number, sources: number }[] = [];
 
     // Look at scouted rooms for potential targets
     for (const roomName of this.roomsByType.scouted) {
@@ -424,54 +459,40 @@ export class ColonyManager {
       const room = Game.rooms[roomName];
       if (!room) continue;
 
-      // Evaluate the room
-      const score = ScoutHelper.evaluateRoom(room);
+      // Use advanced score if available
+      let score = 0;
+      let sources = 0;
+      if (Memory.roomData[roomName] && typeof Memory.roomData[roomName].expansionScore === 'number') {
+        score = Memory.roomData[roomName].expansionScore;
+        sources = room.find(FIND_SOURCES).length;
+      } else {
+        score = ScoutHelper.evaluateRoom(room);
+        sources = room.find(FIND_SOURCES).length;
+      }
 
       // If score is above threshold, add to potential targets
-      if (score >= 50) {
-        potentialTargets.push({ roomName, score });
+      if (score >= 10) { // Lowered threshold to allow 1-source rooms if needed
+        potentialTargets.push({ roomName, score, sources });
       }
     }
 
-    // Find new rooms to scout if we don't have enough potential targets
-    if (potentialTargets.length < 3 && Game.time % 500 === 0) {
-      // Get a list of rooms to scout from current owned rooms
-      for (const roomName of this.roomsByType.owned) {
-        const candidates = ScoutHelper.findExpansionCandidates(roomName);
-
-        // Filter out rooms we've already scouted
-        const newRooms = candidates.filter(r =>
-          !this.roomsByType.scouted.includes(r) &&
-          !this.roomsByType.owned.includes(r) &&
-          !this.roomsByType.reserved.includes(r)
-        );
-
-        // Add new rooms to scout list with closest owned room info
-        for (const newRoom of newRooms) {
-          if (!Memory.roomData[newRoom]) {
-            Memory.roomData[newRoom] = {
-              ownedRoom: false,
-              reservedRoom: false,
-              lastSeen: 0
-            } as any;
-          }
-        }
-
-        Logger.info(`Found ${newRooms.length} new rooms to scout from ${roomName}`);
-      }
+    // Prefer 2-source rooms, but allow 1-source if no 2-source available
+    let bestTargets = potentialTargets.filter(t => t.sources === 2);
+    if (bestTargets.length === 0) {
+      bestTargets = potentialTargets.filter(t => t.sources === 1);
     }
 
-    // Sort potential targets by score (highest first)
-    potentialTargets.sort((a, b) => b.score - a.score);
+    // Sort best targets by score (highest first)
+    bestTargets.sort((a, b) => b.score - a.score);
 
     // Add new targets to the expansion list
-    if (potentialTargets.length > 0) {
+    if (bestTargets.length > 0) {
       // Add up to 2 new targets
-      for (let i = 0; i < Math.min(2, potentialTargets.length); i++) {
-        const target = potentialTargets[i].roomName;
+      for (let i = 0; i < Math.min(2, bestTargets.length); i++) {
+        const target = bestTargets[i].roomName;
         if (!Memory.colony.expansionTargets.includes(target)) {
           Memory.colony.expansionTargets.push(target);
-          Logger.info(`Added ${target} as expansion target with score ${potentialTargets[i].score}`);
+          Logger.info(`Added ${target} as expansion target with score ${bestTargets[i].score}`);
         }
       }
     }
@@ -521,6 +542,7 @@ declare global {
       resourceBalance: { [resource: string]: { [roomName: string]: number } };
       expansionTargets: string[];
       version: number;
+      lostRooms?: { roomName: string; time: number }[];
     };
   }
 }

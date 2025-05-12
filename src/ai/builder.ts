@@ -6,6 +6,7 @@
 import { Logger } from '../utils/logger';
 import { Profiler } from '../utils/profiler';
 import * as _ from 'lodash';
+import { getDynamicReusePath } from '../utils/helpers';
 
 enum BuilderState {
   Harvesting = 'harvesting',
@@ -60,7 +61,8 @@ export class BuilderAI {
         const exit = creep.pos.findClosestByRange(exitDir as FindConstant);
         if (exit) {
           creep.moveTo(exit, {
-            visualizePathStyle: { stroke: '#ffaa00' }
+            visualizePathStyle: { stroke: '#ffaa00' },
+            reusePath: getDynamicReusePath(creep, exit)
           });
           return;
         }
@@ -124,7 +126,7 @@ export class BuilderAI {
         if (creep.pickup(closestResource) === ERR_NOT_IN_RANGE) {
           creep.moveTo(closestResource, {
             visualizePathStyle: { stroke: '#ffaa00' },
-            reusePath: 10
+            reusePath: getDynamicReusePath(creep, closestResource)
           });
         }
         return;
@@ -144,7 +146,7 @@ export class BuilderAI {
         if (creep.withdraw(closestContainer, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
           creep.moveTo(closestContainer, {
             visualizePathStyle: { stroke: '#ffaa00' },
-            reusePath: 10
+            reusePath: getDynamicReusePath(creep, closestContainer)
           });
         }
         return;
@@ -156,7 +158,7 @@ export class BuilderAI {
       if (creep.withdraw(creep.room.storage, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
         creep.moveTo(creep.room.storage, {
           visualizePathStyle: { stroke: '#ffaa00' },
-          reusePath: 10
+          reusePath: getDynamicReusePath(creep, creep.room.storage)
         });
       }
       return;
@@ -193,7 +195,7 @@ export class BuilderAI {
       // If still no valid source, move randomly
       if (!memory.targetSourceId) {
         creep.say('⚠️ No src!');
-        creep.moveTo(25, 25);
+        creep.moveTo(25, 25, { reusePath: getDynamicReusePath(creep, new RoomPosition(25, 25, creep.room.name)) });
         return;
       }
       
@@ -206,7 +208,7 @@ export class BuilderAI {
     if (result === ERR_NOT_IN_RANGE) {
       creep.moveTo(targetSource, {
         visualizePathStyle: { stroke: '#ffaa00' },
-        reusePath: 10
+        reusePath: getDynamicReusePath(creep, targetSource)
       });
     }
   }
@@ -236,7 +238,7 @@ export class BuilderAI {
       if (creep.build(target) === ERR_NOT_IN_RANGE) {
         creep.moveTo(target, {
           visualizePathStyle: { stroke: '#ffffff' },
-          reusePath: 10
+          reusePath: getDynamicReusePath(creep, target)
         });
       }
     } else {
@@ -280,7 +282,7 @@ export class BuilderAI {
       if (creep.repair(damagedStructures[0]) === ERR_NOT_IN_RANGE) {
         creep.moveTo(damagedStructures[0], {
           visualizePathStyle: { stroke: '#ffffff' },
-          reusePath: 10
+          reusePath: getDynamicReusePath(creep, damagedStructures[0])
         });
       }
     } else {
@@ -317,7 +319,7 @@ export class BuilderAI {
       if (creep.upgradeController(creep.room.controller) === ERR_NOT_IN_RANGE) {
         creep.moveTo(creep.room.controller, {
           visualizePathStyle: { stroke: '#ffffff' },
-          reusePath: 10
+          reusePath: getDynamicReusePath(creep, creep.room.controller)
         });
       }
     } else {

@@ -89,5 +89,62 @@ export const CONFIG = {
     UPGRADE_CONTROLLER: 60,
     REPAIR: 50,
     WALLS: 40
+  },
+
+  // Defense settings
+  DEFENSE: {
+    HOSTILES_THRESHOLD: 3, // Number of hostiles to trigger emergency
+    RAMPART_CRITICAL_HITS: 1000, // Rampart hits to trigger emergency
+    DEFENDER_MIN: 2, // Minimum defenders to spawn in emergency
+    DEFENDER_MAX: 5, // Maximum defenders to spawn in emergency
+    NOTIFY_INTERVAL: 100, // Minimum ticks between notifications
+    AUTO_SAFE_MODE: true, // Enable automatic safe mode
+    SAFE_MODE_CRITICAL_STRUCTURES: ['spawn', 'storage', 'controller'], // Structures to protect
+    BOOSTED_DETECTION: true, // Enable boosted hostile detection
+    BOOSTED_RESPONSE_MULTIPLIER: 2 // Multiplier for defenders/tower focus if boosted hostiles present
   }
+};
+
+export const EXPANSION_CONFIG = {
+  weights: {
+    sources2: 20,
+    sources1: 5,
+    mineralBase: 5,
+    mineralNew: 20,
+    mineralDuplicate: 2,
+    mineralExtractor: 10,
+    mineralCooldown: -10,
+    mineralMarketHigh: 10,
+    mineralMarketMed: 5,
+    mineralMarketLow: -5,
+    mineralValue: {
+      [RESOURCE_CATALYST]: 30,
+      [RESOURCE_ZYNTHIUM]: 20,
+      [RESOURCE_KEANIUM]: 20,
+      [RESOURCE_UTRIUM]: 15,
+      [RESOURCE_LEMERGIUM]: 15,
+      [RESOURCE_HYDROGEN]: 5,
+      [RESOURCE_OXYGEN]: 5
+    },
+    proximity: 10,
+    proximityFar: -10,
+    openTerrain: 1,
+    swamp: -2,
+    hostileStructures: -20,
+    hostileOwnership: -100,
+    sourceKeeper: -50,
+    highway: -20,
+    border: -10,
+    enemyNearby: -30,
+    enemyStrong: -50,
+    connectsRooms: 15,
+    sector: 10,
+    sectorFar: -10
+  },
+  preferredSectors: [
+    // Example: 'W10N20', 'W20N30'
+  ],
+  blacklistedSectors: [
+    // Example: 'E0N0', 'W0S0'
+  ]
 };

@@ -157,3 +157,11 @@ export class Helpers {
     }
   }
 }
+
+export function getDynamicReusePath(creep: Creep, target: RoomPosition | { pos: RoomPosition }): number {
+  const pos = (target instanceof RoomPosition) ? target : target.pos;
+  const distance = creep.pos.getRangeTo(pos);
+  if (distance < 8) return 3;
+  if (distance < 20) return 10;
+  return Math.min(50, Math.floor(distance * 1.5));
+}

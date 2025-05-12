@@ -7,6 +7,14 @@ import { Logger } from '../utils/logger';
 import { Profiler } from '../utils/profiler';
 import * as _ from 'lodash';
 
+declare global {
+  interface Room {
+    _sources?: Source[];
+    _structures?: AnyStructure[];
+    _sourcesTick?: number;
+  }
+}
+
 enum HarvesterState {
   Harvesting = 'harvesting',
   Unloading = 'unloading',
@@ -19,8 +27,16 @@ export class HarvesterAI {
    */
   @Profiler.wrap('HarvesterAI.task')
   public static task(creep: Creep): void {
+    // Batch actions: only run every 3 ticks, staggered by creep name
+    if (Game.time % 3 !== (parseInt(creep.name.replace(/\D/g, ''), 10) % 3)) return;
     // Get or initialize creep memory
     const memory = creep.memory;
+    // Per-tick cache for sources and structures
+    if (!creep.room._sourcesTick || creep.room._sourcesTick !== Game.time) {
+      creep.room._sources = creep.room.find(FIND_SOURCES);
+      creep.room._structures = creep.room.find(FIND_MY_STRUCTURES);
+      creep.room._sourcesTick = Game.time;
+    }
     
     // Always define mineral for all states
     const mineral = creep.room.find(FIND_MINERALS)[0];
@@ -94,37 +110,25 @@ export class HarvesterAI {
     }
     
     // Get target source
-    const targetSource = Game.getObjectById(memory.targetSourceId as Id<Source>);
+    let targetSource = Game.getObjectById(memory.targetSourceId as Id<Source>);
+    // If not in memory, use per-tick cache
+    if (!targetSource && creep.room._sources && creep.room._sources.length > 0) {
+      targetSource = creep.pos.findClosestByRange(creep.room._sources);
+      memory.targetSourceId = targetSource ? targetSource.id : null;
+    }
     
     // Check if source exists
     if (!targetSource) {
       Logger.debug(`${creep.name}: Invalid source, getting new source`);
-
-      // Safely get a new target source
-      try {
-        if (global.go && global.go.resource && global.go.resource.selectClosestTo) {
-          memory.targetSourceId = global.go.resource.selectClosestTo(creep);
-        } else {
-          // Fallback - find source directly
-          const sources = creep.room.find(FIND_SOURCES);
-          if (sources.length > 0) {
-            const source = creep.pos.findClosestByRange(sources);
-            memory.targetSourceId = source ? source.id : null;
-          }
-        }
-      } catch (e) {
-        console.log(`Error finding source for ${creep.name}: ${e}`);
-        // Find any source as a fallback
-        const sources = creep.room.find(FIND_SOURCES);
-        if (sources.length > 0) {
-          memory.targetSourceId = sources[0].id;
-        }
+      // Use per-tick cache for sources
+      if (creep.room._sources && creep.room._sources.length > 0) {
+        const source = creep.pos.findClosestByRange(creep.room._sources);
+        memory.targetSourceId = source ? source.id : null;
       }
-
       // If still no valid source, move randomly
       if (!memory.targetSourceId) {
         creep.say('⚠️ No src!');
-        creep.moveTo(25, 25, { reusePath: 10 });
+        creep.moveTo(25, 25, { reusePath: 20 });
         return;
       }
       
@@ -136,8 +140,7 @@ export class HarvesterAI {
     
     if (result === ERR_NOT_IN_RANGE) {
       creep.moveTo(targetSource, {
-        visualizePathStyle: { stroke: '#ffaa00' },
-        reusePath: 10
+        reusePath: 20
       });
     }
   }
@@ -154,16 +157,18 @@ export class HarvesterAI {
       if (creep.room.storage) {
         target = creep.room.storage;
       } else {
-        target = creep.pos.findClosestByPath(FIND_MY_STRUCTURES, {
-          filter: (s: AnyStructure) =>
+        // Use per-tick cache for structures
+        if (creep.room._structures) {
+          target = creep.pos.findClosestByPath(creep.room._structures.filter((s: AnyStructure) =>
             (s.structureType === STRUCTURE_SPAWN ||
              s.structureType === STRUCTURE_EXTENSION) &&
             s.store.getFreeCapacity(RESOURCE_ENERGY) > 0
-        });
+          ));
+        }
       }
       if (target) {
         if (creep.transfer(target, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
-          creep.moveTo(target, { reusePath: 10 });
+          creep.moveTo(target, { reusePath: 20 });
         }
       }
     }

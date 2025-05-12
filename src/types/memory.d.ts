@@ -57,6 +57,10 @@ interface RoomMemory {
   };
   fillTargets?: Id<Structure>[];
   collectTargets?: Id<StructureContainer>[];
+  roadHeatmap?: { [x: number]: { [y: number]: number } };
+  lastControllerProgress?: number;
+  progressHistory?: number[];
+  idleTicks?: { [role: string]: number };
 }
 
 interface Memory {
@@ -80,6 +84,7 @@ interface Memory {
     resourceBalance: { [resource: string]: { [roomName: string]: number } };
     expansionTargets: string[];
     version: number;
+    lostRooms?: { roomName: string; time: number }[];
   };
   
   // Room data cache
@@ -93,7 +98,9 @@ interface Memory {
       minerals?: { id: Id<Mineral>, pos: RoomPosition, mineralType: MineralConstant }[];
       hostileTime?: number;
       hostileCount?: number;
+      hostileStructures?: number;
       expansionScore?: number;
+      owner?: string;
     }
   };
   

@@ -16,6 +16,7 @@ import { StructureManager } from './managers/structure-manager';
 import { TaskManager } from './managers/task-manager';
 import { AI } from './ai';
 import * as _ from 'lodash';
+import { MarketTrends } from './utils/market-trends';
 
 // Initialize global objects to maintain compatibility with the old code
 global.ai = AI as any;
@@ -200,6 +201,15 @@ global.controller = {
 
 // Main game loop
 export function loop(): void {
+  // Log total creeps and breakdown by role
+  const creeps = Object.values(Game.creeps);
+  const roleCounts: Record<string, number> = {};
+  for (const creep of creeps) {
+    const role = creep.memory.role || 'unknown';
+    roleCounts[role] = (roleCounts[role] || 0) + 1;
+  }
+  console.log(`[Creeps] Total: ${creeps.length} | Breakdown: ` + Object.entries(roleCounts).map(([role, count]) => `${role}: ${count}`).join(', '));
+
   Profiler.enable(); // Ensure profiler is enabled every tick
   Logger.info(`GCL: ${Game.gcl.level} (${(Game.gcl.progress / Game.gcl.progressTotal * 100).toFixed(2)}%)`, 'GCL');
   Profiler.start('main');
@@ -380,6 +390,9 @@ export function loop(): void {
     if (Game.time % 10 === 5 && Memory.enableStats) {
       StatsDisplay.showStats();
     }
+    
+    // Update market trends every 1000 ticks
+    MarketTrends.update();
     
   } catch (e) {
     Logger.error(`Critical error in main loop: ${(e as Error).stack || (e as Error).message}`);

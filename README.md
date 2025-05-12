@@ -15,8 +15,13 @@ This is an advanced implementation of Screeps AI with TypeScript support, using 
 - Priority-based spawning system
 - Automatic room planning and construction
 - Room defense and hostile detection
+- Advanced defense: automatic safe mode, boosted enemy detection, nuke detection
+- In-game visual overlays for emergencies, nukes, and threat levels
+- Analytics: hostile activity logs, nuke warnings, and more
 - Statistics visualization and monitoring
 - Remote mining and resource sharing between rooms
+- Market analytics: real-time mineral price tracking and trend analysis
+- **Automated Structure Cleanup:** The system automatically detects and removes all non-owned hostile or neutral structures (except roads, containers, ramparts, walls, and controllers) by spawning destroyer creeps. This keeps your rooms clear of abandoned or enemy structures without manual intervention.
 
 ## Installation
 
@@ -110,7 +115,11 @@ npm run deploy:watch
     - `builder.ts` - Builder creep logic
     - `claimer.ts` - Room claiming logic
     - `tower.ts` - Tower defense logic
+    - `destroyer.ts` - Structure destruction/attack logic
+    - `defender.ts` - Room defense/defender logic
   - `config/` - Game settings and constants
+    - `constants.ts` - Game constants
+    - `index.ts` - Config entry point
   - `managers/` - Manager classes for different game systems
     - `colony-manager.ts` - Multi-room colony coordination
     - `creep-manager.ts` - Creep spawning and assignment
@@ -121,12 +130,15 @@ npm run deploy:watch
   - `types/` - TypeScript type definitions
     - `memory.d.ts` - Memory structure definitions
     - `global.d.ts` - Global object declarations
+    - `room.d.ts` - Room type extensions
+    - `screeps-extended.d.ts` - Extended Screeps types
   - `utils/` - Utility classes
     - `logger.ts` - Advanced colored logging system
     - `profiler.ts` - CPU usage profiling
     - `stats-display.ts` - Game statistics visualization
     - `scout-helper.ts` - Room scouting utilities
     - `helpers.ts` - General helper functions
+    - `market-trends.ts` - Market analytics and mineral price tracking
   - `main.ts` - Main game loop
 
 ## Architecture
@@ -209,6 +221,39 @@ The system includes defensive capabilities:
 1. **Hostile Detection**: Automatically detects enemy creeps
 2. **Tower Management**: Coordinates tower actions for defense
 3. **Safe Mode**: Activates safe mode when critical structures are threatened
+
+## Advanced Defense, Analytics, and Visuals
+
+### Automatic Safe Mode
+If a critical structure (spawn, storage, controller) is under attack and safe mode is available, it will be triggered automatically. This helps prevent catastrophic losses during heavy attacks or nuke landings.
+
+### Boosted Enemy Detection
+The system detects hostile creeps with boosted body parts. If boosted enemies are present, the AI will:
+- Increase the number of defenders spawned
+- Prioritize towers to attack boosted or high-damage hostiles
+- Mark the room as in emergency
+
+### Nuke Detection & Response
+- Incoming nukes are detected, logged, and notified (with ETA and impact position)
+- Room memory tracks nuke emergencies and impact sites
+- Visual overlays show nuke impact locations and ETA
+- (Optionally) Prioritize rampart/wall repairs at nuke impact sites
+
+### Analytics
+- Hostile activity is logged in memory (`hostileLog`)
+- Recent deaths can be tracked (`recentDeaths`)
+- Nuke info is stored in memory (`nukeInfo`)
+- **Per-tick damage stats**: Damage dealt and received is tracked in memory (`damageLog`) and shown in overlays
+- These analytics can be used for in-game stats, debugging, or further automation
+
+### Visual Overlays
+In-game overlays (using RoomVisual) display:
+- Emergency status ("EMERGENCY", "SAFE MODE", "NUKE INCOMING")
+- Nuke impact sites and ETA
+- Hostile and defender counts
+- **Per-tick damage stats** (average damage dealt/received over last 10 ticks)
+
+You can extend these overlays or analytics for your own needs. For example, add per-tick damage stats, creep path overlays, or custom visual themes.
 
 ## Console Commands
 
@@ -326,3 +371,16 @@ console.log(JSON.stringify(Memory.colony, null, 2));
 ## License
 
 MIT License
+
+## Automated Structure Cleanup
+
+When a non-owned hostile or neutral structure (other than roads, containers, ramparts, walls, or controllers) is detected in your room, the system will automatically request a destroyer creep. The destroyer will:
+- Seek out and attack the closest non-owned spawn first.
+- If no spawns are present, attack other non-owned structures.
+- Idle near the controller if nothing is left to destroy.
+
+This ensures your rooms remain free of abandoned or enemy structures, improving security and efficiency.
+
+### AI Roles
+
+- **Destroyer:** Automatically spawned when any non-owned hostile or neutral structure is detected in your room. The destroyer will seek out and attack these structures (spawns, extensions, towers, terminals, labs, links, factories, etc.), prioritizing spawns first, then other structures, and will idle if nothing is left to destroy. The destroyer will not target roads, containers, ramparts, walls, or controllers.

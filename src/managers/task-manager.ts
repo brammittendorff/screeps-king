@@ -292,7 +292,8 @@ export class TaskManager {
     
     if (result === ERR_NOT_IN_RANGE) {
       creep.moveTo(source, {
-        visualizePathStyle: { stroke: '#ffaa00' }
+        visualizePathStyle: { stroke: '#ffaa00' },
+        reusePath: 20
       });
       return TaskStatus.InProgress;
     } else if (result === OK) {
@@ -317,7 +318,8 @@ export class TaskManager {
     
     if (result === ERR_NOT_IN_RANGE) {
       creep.moveTo(controller, {
-        visualizePathStyle: { stroke: '#ffffff' }
+        visualizePathStyle: { stroke: '#ffffff' },
+        reusePath: 20
       });
       return TaskStatus.InProgress;
     } else if (result === OK) {
@@ -342,7 +344,8 @@ export class TaskManager {
     
     if (result === ERR_NOT_IN_RANGE) {
       creep.moveTo(site, {
-        visualizePathStyle: { stroke: '#ffffff' }
+        visualizePathStyle: { stroke: '#ffffff' },
+        reusePath: 20
       });
       return TaskStatus.InProgress;
     } else if (result === OK) {
@@ -372,7 +375,8 @@ export class TaskManager {
     
     if (result === ERR_NOT_IN_RANGE) {
       creep.moveTo(structure, {
-        visualizePathStyle: { stroke: '#ffffff' }
+        visualizePathStyle: { stroke: '#ffffff' },
+        reusePath: 20
       });
       return TaskStatus.InProgress;
     } else if (result === OK) {
@@ -406,7 +410,8 @@ export class TaskManager {
     
     if (result === ERR_NOT_IN_RANGE) {
       creep.moveTo(structure, {
-        visualizePathStyle: { stroke: '#ffffff' }
+        visualizePathStyle: { stroke: '#ffffff' },
+        reusePath: 20
       });
       return TaskStatus.InProgress;
     } else if (result === OK || result === ERR_FULL) {
@@ -440,7 +445,8 @@ export class TaskManager {
     
     if (result === ERR_NOT_IN_RANGE) {
       creep.moveTo(structure, {
-        visualizePathStyle: { stroke: '#ffffff' }
+        visualizePathStyle: { stroke: '#ffffff' },
+        reusePath: 20
       });
       return TaskStatus.InProgress;
     } else if (result === OK || result === ERR_NOT_ENOUGH_RESOURCES) {
@@ -465,7 +471,8 @@ export class TaskManager {
     
     if (result === ERR_NOT_IN_RANGE) {
       creep.moveTo(resource, {
-        visualizePathStyle: { stroke: '#ffffff' }
+        visualizePathStyle: { stroke: '#ffffff' },
+        reusePath: 20
       });
       return TaskStatus.InProgress;
     } else if (result === OK) {

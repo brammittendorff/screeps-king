@@ -5,6 +5,7 @@
 
 import { Logger } from '../utils/logger';
 import { Profiler } from '../utils/profiler';
+import { getDynamicReusePath } from '../utils/helpers';
 
 export class ClaimerAI {
   /**
@@ -53,7 +54,8 @@ export class ClaimerAI {
         const result = creep.attackController(creep.room.controller);
         if (result === ERR_NOT_IN_RANGE) {
           creep.moveTo(creep.room.controller, {
-            visualizePathStyle: { stroke: '#ff0000' }
+            visualizePathStyle: { stroke: '#ff0000' },
+            reusePath: getDynamicReusePath(creep, creep.room.controller)
           });
           creep.say('🗡️ Attack');
         } else if (result === OK) {
@@ -69,9 +71,10 @@ export class ClaimerAI {
       
       if (result === ERR_NOT_IN_RANGE) {
         creep.moveTo(creep.room.controller, {
-          visualizePathStyle: { stroke: '#ffffff' }
+          visualizePathStyle: { stroke: '#ffffff' },
+          reusePath: getDynamicReusePath(creep, creep.room.controller)
         });
-        creep.say('🚶 To ctrl');
+        creep.say(' To ctrl');
       } else if (result === OK) {
         // Successfully claimed!
         Logger.info(`Successfully claimed room ${creep.room.name}!`, 'ClaimerAI');
@@ -102,7 +105,7 @@ export class ClaimerAI {
         
         const reserveResult = creep.reserveController(creep.room.controller);
         if (reserveResult === ERR_NOT_IN_RANGE) {
-          creep.moveTo(creep.room.controller);
+          creep.moveTo(creep.room.controller, { reusePath: getDynamicReusePath(creep, creep.room.controller) });
         }
       } else {
         creep.say(`❌ ${result}`);
@@ -135,7 +138,8 @@ export class ClaimerAI {
     
     // Move to the exit
     creep.moveTo(exit, {
-      visualizePathStyle: { stroke: '#ffffff' }
+      visualizePathStyle: { stroke: '#ffffff' },
+      reusePath: getDynamicReusePath(creep, exit)
     });
     creep.say(`🛣️ ${targetRoom}`);
   }

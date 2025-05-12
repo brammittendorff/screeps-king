@@ -1,5 +1,6 @@
 import { Logger } from '../utils/logger';
 import { Profiler } from '../utils/profiler';
+import { getDynamicReusePath } from '../utils/helpers';
 
 export class DestroyerAI {
   /**
@@ -39,7 +40,7 @@ export class DestroyerAI {
             Logger.warn(`${creep.name} failed to attack spawn: ${result}`);
           }
         } else {
-          creep.moveTo(target, { visualizePathStyle: { stroke: '#ff0000' } });
+          creep.moveTo(target, { visualizePathStyle: { stroke: '#ff0000' }, reusePath: getDynamicReusePath(creep, target) });
           creep.say('🚶‍♂️➡️⚔️');
         }
         return;
@@ -66,7 +67,7 @@ export class DestroyerAI {
             Logger.warn(`${creep.name} failed to attack structure: ${result}`);
           }
         } else {
-          creep.moveTo(target, { visualizePathStyle: { stroke: '#ffaa00' } });
+          creep.moveTo(target, { visualizePathStyle: { stroke: '#ffaa00' }, reusePath: getDynamicReusePath(creep, target) });
           creep.say('🚶‍♂️➡️⚔️');
         }
         return;
@@ -76,9 +77,9 @@ export class DestroyerAI {
     // If nothing to attack, idle in a safe spot
     creep.say('😴 Idle');
     if (creep.room.controller) {
-      creep.moveTo(creep.room.controller, { range: 3 });
+      creep.moveTo(creep.room.controller, { range: 3, reusePath: getDynamicReusePath(creep, creep.room.controller) });
     } else {
-      creep.moveTo(25, 25);
+      creep.moveTo(25, 25, { reusePath: getDynamicReusePath(creep, new RoomPosition(25, 25, creep.room.name)) });
     }
   }
 } 

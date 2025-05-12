@@ -7,6 +7,12 @@ import { Logger } from '../utils/logger';
 import { Profiler } from '../utils/profiler';
 import { Helpers } from '../utils/helpers';
 
+declare global {
+  interface RoomMemory {
+    containerFlags?: { [id: string]: 'pickup' | 'refill' | undefined };
+  }
+}
+
 export class StructureManager {
   /**
    * Run structure operations for all structures
@@ -132,17 +138,99 @@ export class StructureManager {
   }
   
   /**
-   * Run containers logic
+   * Run containers logic (advanced)
    */
   private static runContainers(): void {
-    // Monitor container levels, etc.
+    // Track containers by role and fill status
+    if (!Memory.containers) Memory.containers = {};
+    for (const id in Game.structures) {
+      const structure = Game.structures[id];
+      if (structure.structureType === STRUCTURE_CONTAINER) {
+        const container = structure as StructureContainer;
+        // Detect role: harvest (near source), upgrade (near controller), buffer (near storage), or other
+        let role = 'other';
+        if (container.pos.findInRange(FIND_SOURCES, 1).length > 0) role = 'harvest';
+        else if (container.pos.findInRange(FIND_STRUCTURES, 1, { filter: s => s.structureType === STRUCTURE_CONTROLLER }).length > 0) role = 'upgrade';
+        else if (container.pos.findInRange(FIND_STRUCTURES, 2, { filter: s => s.structureType === STRUCTURE_STORAGE }).length > 0) role = 'buffer';
+        // Store in memory
+        Memory.containers[id] = {
+          id,
+          room: container.room.name,
+          role,
+          lastTick: Game.time,
+          fill: container.store[RESOURCE_ENERGY] || 0,
+          capacity: container.store.getCapacity(RESOURCE_ENERGY)
+        };
+        // Flag for pickup/refill
+        if (!container.room.memory.containerFlags) container.room.memory.containerFlags = {};
+        if (role === 'harvest' && container.store.getFreeCapacity(RESOURCE_ENERGY) < 100) {
+          container.room.memory.containerFlags[id] = 'pickup';
+        } else if (role === 'upgrade' && container.store[RESOURCE_ENERGY] < 200) {
+          container.room.memory.containerFlags[id] = 'refill';
+        } else {
+          container.room.memory.containerFlags[id] = undefined;
+        }
+      }
+    }
   }
   
   /**
-   * Run links logic
+   * Run links logic (advanced)
    */
   private static runLinks(): void {
-    // For now, this is a placeholder for future link management
+    if (!Memory.links) Memory.links = {};
+    // First, classify links by role
+    const links: StructureLink[] = [];
+    for (const id in Game.structures) {
+      const structure = Game.structures[id];
+      if (structure.structureType === STRUCTURE_LINK) {
+        const link = structure as StructureLink;
+        links.push(link);
+        // Detect role: source (near source), storage (near storage), controller (near controller), relay (other)
+        let role = 'relay';
+        if (link.pos.findInRange(FIND_SOURCES, 2).length > 0) role = 'source';
+        else if (link.pos.findInRange(FIND_STRUCTURES, 2, { filter: s => s.structureType === STRUCTURE_STORAGE }).length > 0) role = 'storage';
+        else if (link.pos.findInRange(FIND_STRUCTURES, 2, { filter: s => s.structureType === STRUCTURE_CONTROLLER }).length > 0) role = 'controller';
+        Memory.links[id] = {
+          id,
+          room: link.room.name,
+          role,
+          lastTick: Game.time,
+          energy: link.store[RESOURCE_ENERGY] || 0,
+          cooldown: link.cooldown
+        };
+      }
+    }
+    // Now, transfer logic: source → storage/controller/relay, relay → storage/controller
+    const sources = links.filter(l => Memory.links[l.id].role === 'source');
+    const storages = links.filter(l => Memory.links[l.id].role === 'storage');
+    const controllers = links.filter(l => Memory.links[l.id].role === 'controller');
+    const relays = links.filter(l => Memory.links[l.id].role === 'relay');
+    for (const source of sources) {
+      if (source.cooldown === 0 && source.store[RESOURCE_ENERGY] > 0) {
+        // Prefer storage, then controller, then relay
+        let target: StructureLink | undefined = storages.find(l => l.room.name === source.room.name && l.id !== source.id && l.cooldown === 0);
+        if (!target) target = controllers.find(l => l.room.name === source.room.name && l.id !== source.id && l.cooldown === 0);
+        if (!target) target = relays.find(l => l.room.name === source.room.name && l.id !== source.id && l.cooldown === 0);
+        if (target) {
+          source.transferEnergy(target);
+          Memory.links[source.id].lastTransfer = Game.time;
+          Memory.links[target.id].lastReceive = Game.time;
+        }
+      }
+    }
+    // Relay links: transfer to storage/controller if full
+    for (const relay of relays) {
+      if (relay.cooldown === 0 && relay.store[RESOURCE_ENERGY] > 0) {
+        let target: StructureLink | undefined = storages.find(l => l.room.name === relay.room.name && l.id !== relay.id && l.cooldown === 0);
+        if (!target) target = controllers.find(l => l.room.name === relay.room.name && l.id !== relay.id && l.cooldown === 0);
+        if (target) {
+          relay.transferEnergy(target);
+          Memory.links[relay.id].lastTransfer = Game.time;
+          Memory.links[target.id].lastReceive = Game.time;
+        }
+      }
+    }
   }
   
   /**
