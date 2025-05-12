@@ -4,6 +4,7 @@
  */
 
 import { Logger } from '../utils/logger';
+import { CreepActionGuard } from '../utils/helpers';
 
 declare global {
   interface Room {
@@ -18,6 +19,8 @@ export class UpgraderAI {
    * Main task method for upgrader creeps
    */
   public static task(creep: Creep): void {
+    // --- Action pipeline guard: only one pipeline action per tick (Screeps rule) ---
+    CreepActionGuard.reset(creep);
     // Batch actions: only run every 3 ticks, staggered by creep name
     if (Game.time % 3 !== (parseInt(creep.name.replace(/\D/g, ''), 10) % 3)) return;
     // Per-tick cache for sources, containers, and structures
@@ -45,10 +48,13 @@ export class UpgraderAI {
     if (creep.memory.working) {
       // Working state - upgrade controller
       if (creep.room.controller && creep.room.controller.my) {
-        if (creep.upgradeController(creep.room.controller) === ERR_NOT_IN_RANGE) {
-          const target = creep.room.controller;
-          const reusePath = getDynamicReusePath(creep, target);
-          creep.moveTo(target, { reusePath, visualizePathStyle: { stroke: '#ffaa00' } });
+        // Only one pipeline action per tick (Screeps rule)
+        if (CreepActionGuard.allow(creep, 'upgrade')) {
+          if (creep.upgradeController(creep.room.controller) === ERR_NOT_IN_RANGE) {
+            const target = creep.room.controller;
+            const reusePath = getDynamicReusePath(creep, target);
+            creep.moveTo(target, { reusePath, visualizePathStyle: { stroke: '#ffaa00' } });
+          }
         }
       } else {
         // No controller to upgrade in this room
@@ -65,9 +71,12 @@ export class UpgraderAI {
         if (droppedEnergy.length > 0) {
           target = creep.pos.findClosestByPath(droppedEnergy);
           if (target) {
-            if (creep.pickup(target) === ERR_NOT_IN_RANGE) {
-              const reusePath = getDynamicReusePath(creep, target);
-              creep.moveTo(target, { reusePath, visualizePathStyle: { stroke: '#ffaa00' } });
+            // Only one pipeline action per tick (Screeps rule)
+            if (CreepActionGuard.allow(creep, 'pickup')) {
+              if (creep.pickup(target) === ERR_NOT_IN_RANGE) {
+                const reusePath = getDynamicReusePath(creep, target);
+                creep.moveTo(target, { reusePath, visualizePathStyle: { stroke: '#ffaa00' } });
+              }
             }
             return;
           }
@@ -80,9 +89,12 @@ export class UpgraderAI {
           controller.pos.getRangeTo(a.pos) - controller.pos.getRangeTo(b.pos)
         );
         const bestContainer = containers[0];
-        if (creep.withdraw(bestContainer, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
-          const reusePath = getDynamicReusePath(creep, bestContainer);
-          creep.moveTo(bestContainer, { reusePath, visualizePathStyle: { stroke: '#ffaa00' } });
+        // Only one pipeline action per tick (Screeps rule)
+        if (CreepActionGuard.allow(creep, 'withdraw')) {
+          if (creep.withdraw(bestContainer, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+            const reusePath = getDynamicReusePath(creep, bestContainer);
+            creep.moveTo(bestContainer, { reusePath, visualizePathStyle: { stroke: '#ffaa00' } });
+          }
         }
         return;
       }
@@ -92,9 +104,12 @@ export class UpgraderAI {
           controller.pos.getRangeTo(a.pos) - controller.pos.getRangeTo(b.pos)
         );
         const bestSource = sources[0];
-        if (creep.harvest(bestSource) === ERR_NOT_IN_RANGE) {
-          const reusePath = getDynamicReusePath(creep, bestSource);
-          creep.moveTo(bestSource, { reusePath, visualizePathStyle: { stroke: '#ffaa00' } });
+        // Only one pipeline action per tick (Screeps rule)
+        if (CreepActionGuard.allow(creep, 'harvest')) {
+          if (creep.harvest(bestSource) === ERR_NOT_IN_RANGE) {
+            const reusePath = getDynamicReusePath(creep, bestSource);
+            creep.moveTo(bestSource, { reusePath, visualizePathStyle: { stroke: '#ffaa00' } });
+          }
         }
         return;
       }
@@ -102,9 +117,12 @@ export class UpgraderAI {
       if (creep.room._sources && creep.room._sources.length > 0) {
         const fallbackSource = creep.pos.findClosestByPath(creep.room._sources);
         if (fallbackSource) {
-          if (creep.harvest(fallbackSource) === ERR_NOT_IN_RANGE) {
-            const reusePath = getDynamicReusePath(creep, fallbackSource);
-            creep.moveTo(fallbackSource, { reusePath, visualizePathStyle: { stroke: '#ffaa00' } });
+          // Only one pipeline action per tick (Screeps rule)
+          if (CreepActionGuard.allow(creep, 'harvest')) {
+            if (creep.harvest(fallbackSource) === ERR_NOT_IN_RANGE) {
+              const reusePath = getDynamicReusePath(creep, fallbackSource);
+              creep.moveTo(fallbackSource, { reusePath, visualizePathStyle: { stroke: '#ffaa00' } });
+            }
           }
         }
       } else {

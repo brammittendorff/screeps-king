@@ -8,6 +8,7 @@ import { Logger } from '../utils/logger';
 import * as _ from 'lodash';
 import { getDynamicReusePath } from '../utils/helpers';
 import { TaskManager } from '../managers/task-manager';
+import { CreepActionGuard } from '../utils/helpers';
 
 enum BuilderState {
   Harvesting = 'harvesting',
@@ -21,6 +22,8 @@ export class BuilderAI {
    * Main task method for builder creeps
    */
   public static task(creep: Creep): void {
+    // --- Action pipeline guard: only one pipeline action per tick (Screeps rule) ---
+    CreepActionGuard.reset(creep);
     // --- TaskManager integration ---
     const task = TaskManager.findTaskForCreep(creep);
     if (task) {
@@ -203,14 +206,17 @@ export class BuilderAI {
       return;
     }
     
-    // Harvest the source
-    const result = creep.harvest(targetSource);
-    
-    if (result === ERR_NOT_IN_RANGE) {
-      creep.moveTo(targetSource, {
-        visualizePathStyle: { stroke: '#ffaa00' },
-        reusePath: getDynamicReusePath(creep, targetSource)
-      });
+    // Only one pipeline action per tick (Screeps rule)
+    if (CreepActionGuard.allow(creep, 'harvest')) {
+      // Harvest the source
+      const result = creep.harvest(targetSource);
+      
+      if (result === ERR_NOT_IN_RANGE) {
+        creep.moveTo(targetSource, {
+          visualizePathStyle: { stroke: '#ffaa00' },
+          reusePath: getDynamicReusePath(creep, targetSource)
+        });
+      }
     }
   }
   
@@ -228,8 +234,10 @@ export class BuilderAI {
     // Sort sites by advanced priority
     sites.sort((a, b) => this.getSitePriority(a, creep) - this.getSitePriority(b, creep));
     const target = sites[0];
-    if (creep.build(target) === ERR_NOT_IN_RANGE) {
-      creep.moveTo(target, { visualizePathStyle: { stroke: '#ffffff' }, reusePath: 10 });
+    if (CreepActionGuard.allow(creep, 'build')) {
+      if (creep.build(target) === ERR_NOT_IN_RANGE) {
+        creep.moveTo(target, { visualizePathStyle: { stroke: '#ffffff' }, reusePath: 10 });
+      }
     }
   }
   
@@ -364,11 +372,13 @@ export class BuilderAI {
       // Sort by health percentage, repair most damaged first
       damagedStructures.sort((a, b) => (a.hits / a.hitsMax) - (b.hits / b.hitsMax));
       
-      if (creep.repair(damagedStructures[0]) === ERR_NOT_IN_RANGE) {
-        creep.moveTo(damagedStructures[0], {
-          visualizePathStyle: { stroke: '#ffffff' },
-          reusePath: getDynamicReusePath(creep, damagedStructures[0])
-        });
+      if (CreepActionGuard.allow(creep, 'repair')) {
+        if (creep.repair(damagedStructures[0]) === ERR_NOT_IN_RANGE) {
+          creep.moveTo(damagedStructures[0], {
+            visualizePathStyle: { stroke: '#ffffff' },
+            reusePath: getDynamicReusePath(creep, damagedStructures[0])
+          });
+        }
       }
     } else {
       // No repairs needed, help with upgrading
@@ -401,11 +411,13 @@ export class BuilderAI {
     
     // Upgrade controller if no construction sites
     if (creep.room.controller) {
-      if (creep.upgradeController(creep.room.controller) === ERR_NOT_IN_RANGE) {
-        creep.moveTo(creep.room.controller, {
-          visualizePathStyle: { stroke: '#ffffff' },
-          reusePath: getDynamicReusePath(creep, creep.room.controller)
-        });
+      if (CreepActionGuard.allow(creep, 'upgrade')) {
+        if (creep.upgradeController(creep.room.controller) === ERR_NOT_IN_RANGE) {
+          creep.moveTo(creep.room.controller, {
+            visualizePathStyle: { stroke: '#ffffff' },
+            reusePath: getDynamicReusePath(creep, creep.room.controller)
+          });
+        }
       }
     } else {
       // No controller? Strange, but switch to harvesting

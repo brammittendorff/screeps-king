@@ -6,6 +6,7 @@
 import { Logger } from '../utils/logger';
 import * as _ from 'lodash';
 import { RoomCache } from '../utils/room-cache';
+import { CreepActionGuard, getDynamicReusePath } from '../utils/helpers';
 
 declare global {
   interface Room {
@@ -28,6 +29,8 @@ export class HarvesterAI {
   public static task(creep: Creep): void {
     // Batch actions: only run every 3 ticks, staggered by creep name
     if (Game.time % 3 !== (parseInt(creep.name.replace(/\D/g, ''), 10) % 3)) return;
+    // --- Action pipeline guard: only one pipeline action per tick (Screeps rule) ---
+    CreepActionGuard.reset(creep);
     // Get or initialize creep memory
     const memory = creep.memory;
     // Use RoomCache for sources and structures
@@ -126,12 +129,14 @@ export class HarvesterAI {
     }
     
     // Harvest the source
-    const result = creep.harvest(targetSource);
-    
-    if (result === ERR_NOT_IN_RANGE) {
-      creep.moveTo(targetSource, {
-        reusePath: 20
-      });
+    // Only one pipeline action per tick (Screeps rule)
+    if (CreepActionGuard.allow(creep, 'harvest')) {
+      const result = creep.harvest(targetSource);
+      if (result === ERR_NOT_IN_RANGE) {
+        creep.moveTo(targetSource, {
+          reusePath: getDynamicReusePath(creep, targetSource)
+        });
+      }
     }
   }
   
@@ -143,40 +148,64 @@ export class HarvesterAI {
     // If carrying energy, deliver to highest priority target
     if (creep.store[RESOURCE_ENERGY] > 0) {
       // 1. Spawns first, then extensions
-      let spawns = RoomCache.get(creep.room, FIND_MY_STRUCTURES).filter((s) => s.structureType === STRUCTURE_SPAWN && (s as any).energy < (s as any).energyCapacity);
+      const spawns = RoomCache.get(creep.room, FIND_MY_STRUCTURES).filter(
+        (s) => s.structureType === STRUCTURE_SPAWN && s.store && s.store.getFreeCapacity(RESOURCE_ENERGY) > 0
+      );
       if (spawns.length > 0) {
-        if (creep.transfer(spawns[0], RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
-          creep.moveTo(spawns[0], { reusePath: 10 });
+        if (CreepActionGuard.allow(creep, 'transfer')) {
+          if (creep.transfer(spawns[0], RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+            creep.moveTo(spawns[0], { reusePath: getDynamicReusePath(creep, spawns[0]) });
+          }
         }
         return;
+      } else {
+        // No available spawns, log why
+        const allSpawns = RoomCache.get(creep.room, FIND_MY_STRUCTURES).filter((s) => s.structureType === STRUCTURE_SPAWN);
+        if (allSpawns.length === 0) {
+          Logger.info(`${creep.name}: No spawns in room ${creep.room.name} to deliver energy to.`, 'Harvester');
+        } else if (allSpawns.every(s => s.store && s.store.getFreeCapacity(RESOURCE_ENERGY) === 0)) {
+          Logger.info(`${creep.name}: All spawns in room ${creep.room.name} are full.`, 'Harvester');
+        } else {
+          Logger.info(`${creep.name}: Could not deliver to spawn for unknown reason.`, 'Harvester');
+        }
       }
-      let extensions = RoomCache.get(creep.room, FIND_MY_STRUCTURES).filter((s) => s.structureType === STRUCTURE_EXTENSION && (s as any).energy < (s as any).energyCapacity);
+      const extensions = RoomCache.get(creep.room, FIND_MY_STRUCTURES).filter(
+        (s) => s.structureType === STRUCTURE_EXTENSION && s.store && s.store.getFreeCapacity(RESOURCE_ENERGY) > 0
+      );
       if (extensions.length > 0) {
-        if (creep.transfer(extensions[0], RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
-          creep.moveTo(extensions[0], { reusePath: 10 });
+        if (CreepActionGuard.allow(creep, 'transfer')) {
+          if (creep.transfer(extensions[0], RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+            creep.moveTo(extensions[0], { reusePath: getDynamicReusePath(creep, extensions[0]) });
+          }
         }
         return;
       }
       // 2. Controller container (if exists)
       const controllerContainer = RoomCache.get(creep.room, FIND_MY_STRUCTURES).filter((s) => s.structureType === STRUCTURE_CONTAINER && creep.room.controller && s.pos.getRangeTo(creep.room.controller) <= 3 && s.store.getFreeCapacity(RESOURCE_ENERGY) > 0);
       if (controllerContainer.length > 0) {
-        if (creep.transfer(controllerContainer[0], RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
-          creep.moveTo(controllerContainer[0], { reusePath: 10 });
+        if (CreepActionGuard.allow(creep, 'transfer')) {
+          if (creep.transfer(controllerContainer[0], RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+            creep.moveTo(controllerContainer[0], { reusePath: getDynamicReusePath(creep, controllerContainer[0]) });
+          }
         }
         return;
       }
       // 3. Storage (if exists and not full)
       if (creep.room.storage && creep.room.storage.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
-        if (creep.transfer(creep.room.storage, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
-          creep.moveTo(creep.room.storage, { reusePath: 10 });
+        if (CreepActionGuard.allow(creep, 'transfer')) {
+          if (creep.transfer(creep.room.storage, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+            creep.moveTo(creep.room.storage, { reusePath: getDynamicReusePath(creep, creep.room.storage) });
+          }
         }
         return;
       }
       // 4. Towers (if not full)
       const towers = RoomCache.get(creep.room, FIND_MY_STRUCTURES).filter((s) => s.structureType === STRUCTURE_TOWER && (s as StructureTower).energy < (s as StructureTower).energyCapacity);
       if (towers.length > 0) {
-        if (creep.transfer(towers[0], RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
-          creep.moveTo(towers[0], { reusePath: 10 });
+        if (CreepActionGuard.allow(creep, 'transfer')) {
+          if (creep.transfer(towers[0], RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+            creep.moveTo(towers[0], { reusePath: getDynamicReusePath(creep, towers[0]) });
+          }
         }
         return;
       }
@@ -222,7 +251,8 @@ export class HarvesterAI {
     }
     
     // Handle build mode
-    if (memory.buildMode === 1) {
+    // Only one pipeline action per tick (Screeps rule)
+    if (CreepActionGuard.allow(creep, 'build')) {
       // Find construction sites
       const targets = RoomCache.get(creep.room, FIND_MY_CONSTRUCTION_SITES);
       
@@ -230,7 +260,7 @@ export class HarvesterAI {
         if (creep.build(targets[0]) === ERR_NOT_IN_RANGE) {
           creep.moveTo(targets[0], {
             visualizePathStyle: { stroke: '#ffffff' },
-            reusePath: 10
+            reusePath: getDynamicReusePath(creep, targets[0])
           });
         }
       } else {
@@ -259,7 +289,7 @@ export class HarvesterAI {
         if (creep.repair(targets[0]) === ERR_NOT_IN_RANGE) {
           creep.moveTo(targets[0], {
             visualizePathStyle: { stroke: '#ffffff' },
-            reusePath: 10
+            reusePath: getDynamicReusePath(creep, targets[0])
           });
         }
       } else {

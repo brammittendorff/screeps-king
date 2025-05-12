@@ -9,12 +9,15 @@ import * as _ from 'lodash';
 import { TaskManager } from '../managers/task-manager';
 import { RoomCache } from '../utils/room-cache';
 import { RoomTaskManager } from '../managers/room-task-manager';
+import { CreepActionGuard } from '../utils/helpers';
 
 export class HaulerAI {
   /**
    * Main task method for hauler creeps
    */
   public static task(creep: Creep): void {
+    // --- Action pipeline guard: only one pipeline action per tick (Screeps rule) ---
+    CreepActionGuard.reset(creep);
     // Use TaskManager only for special/remote tasks
     const task = TaskManager.findTaskForCreep(creep);
     if (task) {
@@ -53,8 +56,11 @@ export class HaulerAI {
       if (refillTargets.length > 0) {
         const target = creep.pos.findClosestByPath(refillTargets);
         if (target) {
-          if (creep.transfer(target, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
-            creep.moveTo(target, { reusePath: 10 });
+          // Only one pipeline action per tick (Screeps rule)
+          if (CreepActionGuard.allow(creep, 'transfer')) {
+            if (creep.transfer(target, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+              creep.moveTo(target, { reusePath: 10 });
+            }
           }
           return;
         }
@@ -73,8 +79,11 @@ export class HaulerAI {
       if (pickupTargets.length > 0) {
         const target = creep.pos.findClosestByPath(pickupTargets);
         if (target) {
-          if (creep.pickup(target) === ERR_NOT_IN_RANGE) {
-            creep.moveTo(target, { reusePath: 10 });
+          // Only one pipeline action per tick (Screeps rule)
+          if (CreepActionGuard.allow(creep, 'pickup')) {
+            if (creep.pickup(target) === ERR_NOT_IN_RANGE) {
+              creep.moveTo(target, { reusePath: 10 });
+            }
           }
           return;
         }
@@ -87,16 +96,22 @@ export class HaulerAI {
       }) as (StructureContainer | StructureStorage)[];
       sources = _.sortBy(sources, s => -s.store[RESOURCE_ENERGY]);
       if (sources.length > 0) {
-        if (creep.withdraw(sources[0], RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
-          creep.moveTo(sources[0], { reusePath: 10 });
+        // Only one pipeline action per tick (Screeps rule)
+        if (CreepActionGuard.allow(creep, 'withdraw')) {
+          if (creep.withdraw(sources[0], RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+            creep.moveTo(sources[0], { reusePath: 10 });
+          }
         }
         return;
       }
       // 3. Fallback: harvest from source (if no containers/storage)
       const sourcesRaw = RoomCache.get(creep.room, FIND_SOURCES_ACTIVE);
       if (sourcesRaw.length > 0) {
-        if (creep.harvest(sourcesRaw[0]) === ERR_NOT_IN_RANGE) {
-          creep.moveTo(sourcesRaw[0], { reusePath: 10 });
+        // Only one pipeline action per tick (Screeps rule)
+        if (CreepActionGuard.allow(creep, 'harvest')) {
+          if (creep.harvest(sourcesRaw[0]) === ERR_NOT_IN_RANGE) {
+            creep.moveTo(sourcesRaw[0], { reusePath: 10 });
+          }
         }
         return;
       }

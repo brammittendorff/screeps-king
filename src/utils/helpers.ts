@@ -165,3 +165,35 @@ export function getDynamicReusePath(creep: Creep, target: RoomPosition | { pos: 
   if (distance < 20) return 10;
   return Math.min(50, Math.floor(distance * 1.5));
 }
+
+/**
+ * CreepActionGuard
+ * Utility to enforce Screeps action pipeline: only one energy-using action per tick.
+ * Use in AI modules to ensure only one of harvest, build, repair, upgrade, transfer, withdraw, pickup, etc. is called per tick.
+ * See: https://docs.screeps.com/simultaneous-actions.html
+ */
+export class CreepActionGuard {
+  private static actionKey = 'actionGuard';
+
+  /**
+   * Call this before a pipeline action. Returns true if allowed, false if already called.
+   * Optionally logs a warning if multiple actions are attempted.
+   */
+  static allow(creep: Creep, action: string): boolean {
+    if (!creep.memory[CreepActionGuard.actionKey]) {
+      creep.memory[CreepActionGuard.actionKey] = action;
+      return true;
+    } else {
+      // Uncomment to log warnings:
+      // console.log(`[ActionGuard] ${creep.name} attempted multiple actions: ${creep.memory[CreepActionGuard.actionKey]} and ${action}`);
+      return false;
+    }
+  }
+
+  /**
+   * Reset at the start of each tick (should be called at the start of the creep's task method)
+   */
+  static reset(creep: Creep): void {
+    delete creep.memory[CreepActionGuard.actionKey];
+  }
+}

@@ -74,6 +74,24 @@ export class ScoutAI {
       }
     }
     // If nothing to do, idle at spawn or center
+    let spawns = RoomCache.get(creep.room, FIND_MY_STRUCTURES).filter(
+      (s) => s.structureType === STRUCTURE_SPAWN && s.store.getFreeCapacity(RESOURCE_ENERGY) > 0
+    );
+    if (spawns.length > 0) {
+      if (creep.transfer(spawns[0], RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+        creep.moveTo(spawns[0], { reusePath: 10 });
+      }
+      return;
+    }
+    let extensions = RoomCache.get(creep.room, FIND_MY_STRUCTURES).filter(
+      (s) => s.structureType === STRUCTURE_EXTENSION && s.store.getFreeCapacity(RESOURCE_ENERGY) > 0
+    );
+    if (extensions.length > 0) {
+      if (creep.transfer(extensions[0], RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+        creep.moveTo(extensions[0], { reusePath: 10 });
+      }
+      return;
+    }
     const spawn = RoomCache.get(creep.room, FIND_MY_SPAWNS)[0];
     if (spawn) {
       creep.moveTo(spawn, { range: 3, reusePath: 10 });

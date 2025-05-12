@@ -2,6 +2,33 @@
 
 This is an advanced implementation of Screeps AI with TypeScript support, using best practices and optimized performance. The system features a sophisticated multi-room colony management system with expansion capabilities, advanced logging, and resource sharing between rooms.
 
+## 🚀 Latest Features
+
+- **Robust Memory Management:**
+  - Aggressive cleanup of orphaned and legacy memory entries
+  - Defensive, type-safe access to all memory structures
+  - Creep memory versioning and auto-upgrade on deploy
+- **Professional Task System:**
+  - Batched, on-demand room tasks for routine jobs (no memory bloat)
+  - All tasks (including special/remote) are logged in detail every 100 ticks
+  - TaskManager aggressively prunes old/invalid tasks
+- **Advanced Build Planning:**
+  - Containers are optimally placed (non-swamp, near roads, not blocked)
+  - Redundant containers for high-traffic sources (auto-detected)
+  - Automatic rebuild if a container is destroyed
+  - Tagging of build queue entries for clarity (e.g., 'source container', 'controller container')
+- **Energy Delivery Prioritization:**
+  - Harvesters and haulers always fill spawns before extensions, maximizing spawn uptime
+- **Detailed Stats & Logging:**
+  - Per-tick heartbeat log with tick number, GCL, creeps, CPU, memory, and countdown to next stats
+  - Every 100 ticks: full stats, build queue, construction sites, and all active tasks (with type, target, assigned creeps, priority, age)
+- **Professional Error Handling:**
+  - All manager calls are wrapped in try/catch with error logging
+  - Defensive checks for corrupted or missing memory
+- **Remote & Expansion Logic:**
+  - Remote sources get containers with the same advanced logic
+  - Expansion targets are scored and prioritized
+
 ## Features
 
 - Fully TypeScript implementation with type definitions
@@ -134,7 +161,7 @@ npm run deploy:watch
     - `screeps-extended.d.ts` - Extended Screeps types
   - `utils/` - Utility classes
     - `logger.ts` - Advanced colored logging system
-    - `profiler.ts` - CPU usage profiling
+    - `profiler.ts` - (Deprecated) CPU usage profiling (see README note)
     - `stats-display.ts` - Game statistics visualization
     - `scout-helper.ts` - Room scouting utilities
     - `helpers.ts` - General helper functions
@@ -236,24 +263,27 @@ The system detects hostile creeps with boosted body parts. If boosted enemies ar
 ### Nuke Detection & Response
 - Incoming nukes are detected, logged, and notified (with ETA and impact position)
 - Room memory tracks nuke emergencies and impact sites
-- Visual overlays show nuke impact locations and ETA
+- (Optional) Visual overlays can show nuke impact locations and ETA if enabled in your code
 - (Optionally) Prioritize rampart/wall repairs at nuke impact sites
 
 ### Analytics
 - Hostile activity is logged in memory (`hostileLog`)
 - Recent deaths can be tracked (`recentDeaths`)
 - Nuke info is stored in memory (`nukeInfo`)
-- **Per-tick damage stats**: Damage dealt and received is tracked in memory (`damageLog`) and shown in overlays
+- **Per-tick damage stats**: Damage dealt and received is tracked in memory (`damageLog`) and can be shown in overlays if enabled
 - These analytics can be used for in-game stats, debugging, or further automation
 
-### Visual Overlays
-In-game overlays (using RoomVisual) display:
+### Visual Overlays (Optional)
+If enabled in your code, in-game overlays (using RoomVisual) can display:
 - Emergency status ("EMERGENCY", "SAFE MODE", "NUKE INCOMING")
 - Nuke impact sites and ETA
 - Hostile and defender counts
 - **Per-tick damage stats** (average damage dealt/received over last 10 ticks)
 
 You can extend these overlays or analytics for your own needs. For example, add per-tick damage stats, creep path overlays, or custom visual themes.
+
+### Profiler (Deprecated)
+The original `profiler.ts` for CPU usage profiling has been removed. For modern profiling, use Screeps' built-in CPU tools or third-party profilers as needed.
 
 ## Console Commands
 
