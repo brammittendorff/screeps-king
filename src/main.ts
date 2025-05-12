@@ -200,6 +200,8 @@ global.controller = {
 
 // Main game loop
 export function loop(): void {
+  Profiler.enable(); // Ensure profiler is enabled every tick
+  Logger.info(`GCL: ${Game.gcl.level} (${(Game.gcl.progress / Game.gcl.progressTotal * 100).toFixed(2)}%)`, 'GCL');
   Profiler.start('main');
 
   try {

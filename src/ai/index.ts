@@ -8,6 +8,7 @@ import { UpgraderAI } from './upgrader';
 import { TowerAI } from './tower';
 import { BuilderAI } from './builder';
 import { ClaimerAI } from './claimer';
+import { DestroyerAI } from './destroyer';
 
 // Export all AI modules
 export const AI = {
@@ -15,5 +16,6 @@ export const AI = {
   upgrader: UpgraderAI,
   tower: TowerAI,
   builder: BuilderAI,
-  claimer: ClaimerAI
+  claimer: ClaimerAI,
+  destroyer: DestroyerAI
 };

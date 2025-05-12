@@ -9,6 +9,7 @@ import { Profiler } from '../utils/profiler';
 import { Helpers } from '../utils/helpers';
 import { ScoutHelper } from '../utils/scout-helper';
 import * as _ from 'lodash';
+import { AI } from '../ai';
 
 export enum CreepRole {
   Harvester = 'harvester',
@@ -19,7 +20,8 @@ export enum CreepRole {
   RemoteHarvester = 'remoteHarvester',
   Hauler = 'hauler',
   Scout = 'scout',
-  Claimer = 'claimer'
+  Claimer = 'claimer',
+  Destroyer = 'destroyer'
 }
 
 export interface CreepRequest {
@@ -345,6 +347,9 @@ export class CreepManager {
               this.runReserver(creep);
             }
             break;
+          case CreepRole.Destroyer:
+            AI.destroyer.task(creep);
+            break;
           default:
             // Run as harvester by default
             if (global.ai.harvester && global.ai.harvester.task) {
@@ -412,27 +417,20 @@ export class CreepManager {
           }
         }
       } else {
-        // Deliver energy to storage or spawn
+        // Deliver energy to storage or spawn/extension
         let target: Structure | null = null;
-        
         // First check for storage
         if (creep.room.storage) {
           target = creep.room.storage;
         } else {
-          // Otherwise find spawns and extensions that need energy
-          const structures = creep.room.find(FIND_MY_STRUCTURES, {
-            filter: (s) => {
-              return (s.structureType === STRUCTURE_SPAWN ||
-                     s.structureType === STRUCTURE_EXTENSION) &&
-                    s.store.getFreeCapacity(RESOURCE_ENERGY) > 0;
-            }
+          // Find the closest spawn or extension with free capacity
+          target = creep.pos.findClosestByPath(FIND_MY_STRUCTURES, {
+            filter: (s: AnyStructure) =>
+              (s.structureType === STRUCTURE_SPAWN ||
+               s.structureType === STRUCTURE_EXTENSION) &&
+              s.store.getFreeCapacity(RESOURCE_ENERGY) > 0
           });
-          
-          if (structures.length > 0) {
-            target = structures[0];
-          }
         }
-        
         if (target) {
           if (creep.transfer(target, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
             creep.moveTo(target);
@@ -677,7 +675,8 @@ export class CreepManager {
           [CreepRole.Reserver]: 0,
           [CreepRole.Hauler]: 0,
           [CreepRole.Scout]: 0,
-          [CreepRole.Claimer]: 0
+          [CreepRole.Claimer]: 0,
+          [CreepRole.Destroyer]: 0
         };
       }
     }
@@ -970,6 +969,33 @@ export class CreepManager {
 
         return body;
 
+      case CreepRole.Destroyer:
+        // Destroyers need TOUGH and ATTACK parts
+        if (energy >= 650) {
+          body = [TOUGH, TOUGH, MOVE, MOVE, ATTACK, ATTACK, ATTACK, ATTACK];
+        } else if (energy >= 390) {
+          body = [TOUGH, MOVE, ATTACK, ATTACK, ATTACK];
+        } else {
+          body = [MOVE, ATTACK];
+        }
+
+        remainingEnergy = energy - Helpers.getBodyCost(body);
+
+        // Add more TOUGH and ATTACK parts
+        while (remainingEnergy >= 200 && body.length < 50) {
+          if (remainingEnergy >= 150) {
+            body.push(TOUGH);
+            remainingEnergy -= 150;
+          }
+
+          if (remainingEnergy >= 50) {
+            body.push(MOVE);
+            remainingEnergy -= 50;
+          }
+        }
+
+        return body;
+
       default:
         // Default body
         return [WORK, CARRY, MOVE];
@@ -1008,6 +1034,45 @@ export class CreepManager {
         });
       }
     }
+  }
+
+  // In requestCreeps (or similar room logic), add destroyer spawn logic
+  // This is a simplified version; you may want to place it in a more advanced room evaluation section
+  private static requestCreeps(room: Room): void {
+    // ... existing code ...
+    // Advanced: Spawn a destroyer if there is a non-owned spawn in the room and no destroyer present
+    const hostileSpawns = room.find(FIND_STRUCTURES, {
+      filter: (s: Structure) =>
+        s.structureType === STRUCTURE_SPAWN &&
+        !(s as StructureSpawn).my
+    });
+    const destroyerCount = _.filter(Game.creeps, c => c.memory.role === CreepRole.Destroyer && c.memory.homeRoom === room.name).length;
+    if (hostileSpawns.length > 0 && destroyerCount === 0) {
+      // Use a robust body for destroyers (e.g., [MOVE, MOVE, ATTACK, ATTACK, ATTACK, ATTACK, TOUGH, TOUGH])
+      const energy = room.energyCapacityAvailable;
+      let body: BodyPartConstant[] = [];
+      if (energy >= 650) {
+        body = [TOUGH, TOUGH, MOVE, MOVE, ATTACK, ATTACK, ATTACK, ATTACK];
+      } else if (energy >= 390) {
+        body = [TOUGH, MOVE, ATTACK, ATTACK, ATTACK];
+      } else {
+        body = [MOVE, ATTACK];
+      }
+      this.requestCreep({
+        role: CreepRole.Destroyer,
+        body: body,
+        priority: 90, // High priority
+        roomName: room.name,
+        memory: {
+          role: CreepRole.Destroyer,
+          homeRoom: room.name
+        }
+      });
+      Logger.info(`[${room.name}] Requested destroyer to remove hostile/neutral spawn.`);
+      // Don't spawn more than one destroyer at a time
+      return;
+    }
+    // ... existing code ...
   }
 }
 

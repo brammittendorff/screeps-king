@@ -57,54 +57,21 @@ export class HarvesterAI {
     // State machine for harvester behavior
     switch (memory.activity as HarvesterState) {
       case HarvesterState.Harvesting:
-        // Advanced: Prefer energy, but if full or no energy available, mine minerals if possible
-        const extractor = creep.room.find(FIND_STRUCTURES, {
-          filter: s => s.structureType === STRUCTURE_EXTRACTOR
-        })[0];
-        // @ts-ignore
-        const mineralAvailable = extractor && mineral && mineral.amount > 0 && (!mineral.ticksToRegeneration || mineral.ticksToRegeneration === 0);
-        // If not full of energy, prefer energy sources
-        if (creep.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
-          this.doHarvesting(creep);
-        } else if (mineralAvailable && creep.store.getFreeCapacity(mineral.mineralType) > 0) {
-          // If full of energy but can carry minerals, mine minerals
-          if (creep.harvest(mineral) === ERR_NOT_IN_RANGE) {
-            creep.moveTo(mineral, { visualizePathStyle: { stroke: '#00ff00' } });
-          }
-        } else {
-          // If can't mine minerals, unload
-          memory.activity = HarvesterState.Unloading;
-          creep.say('🔄 Unload');
-        }
+        Profiler.start('HarvesterAI.harvesting');
+        this.doHarvesting(creep);
+        Profiler.end('HarvesterAI.harvesting');
         break;
       case HarvesterState.Unloading:
-        // Advanced: If carrying minerals, deliver to storage/terminal
-        const mineralType = mineral ? mineral.mineralType : null;
-        if (mineralType && creep.store[mineralType] > 0) {
-          // Prefer storage, then terminal
-          const storage = creep.room.storage;
-          const terminal = creep.room.terminal;
-          let target = null;
-          if (storage && storage.store.getFreeCapacity(mineralType) > 0) {
-            target = storage;
-          } else if (terminal && terminal.store.getFreeCapacity(mineralType) > 0) {
-            target = terminal;
-          }
-          if (target) {
-            if (creep.transfer(target, mineralType) === ERR_NOT_IN_RANGE) {
-              creep.moveTo(target, { visualizePathStyle: { stroke: '#00ff00' } });
-            }
-            return;
-          }
-        }
-        // Otherwise, do normal unloading
+        Profiler.start('HarvesterAI.unloading');
         this.doUnloading(creep);
+        Profiler.end('HarvesterAI.unloading');
         break;
       case HarvesterState.Building:
+        Profiler.start('HarvesterAI.building');
         this.doBuilding(creep);
+        Profiler.end('HarvesterAI.building');
         break;
       default:
-        // Reset to harvesting
         memory.activity = HarvesterState.Harvesting;
         creep.say('🔄 Reset');
     }
@@ -157,7 +124,7 @@ export class HarvesterAI {
       // If still no valid source, move randomly
       if (!memory.targetSourceId) {
         creep.say('⚠️ No src!');
-        creep.moveTo(25, 25);
+        creep.moveTo(25, 25, { reusePath: 10 });
         return;
       }
       
@@ -169,7 +136,8 @@ export class HarvesterAI {
     
     if (result === ERR_NOT_IN_RANGE) {
       creep.moveTo(targetSource, {
-        visualizePathStyle: { stroke: '#ffaa00' }
+        visualizePathStyle: { stroke: '#ffaa00' },
+        reusePath: 10
       });
     }
   }
@@ -179,6 +147,26 @@ export class HarvesterAI {
    */
   private static doUnloading(creep: Creep): void {
     const memory = creep.memory;
+    
+    // If carrying energy, deliver to closest spawn/extension/storage
+    if (creep.store[RESOURCE_ENERGY] > 0) {
+      let target: Structure | null = null;
+      if (creep.room.storage) {
+        target = creep.room.storage;
+      } else {
+        target = creep.pos.findClosestByPath(FIND_MY_STRUCTURES, {
+          filter: (s: AnyStructure) =>
+            (s.structureType === STRUCTURE_SPAWN ||
+             s.structureType === STRUCTURE_EXTENSION) &&
+            s.store.getFreeCapacity(RESOURCE_ENERGY) > 0
+        });
+      }
+      if (target) {
+        if (creep.transfer(target, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+          creep.moveTo(target, { reusePath: 10 });
+        }
+      }
+    }
     
     // Switch back to harvesting if empty
     if (creep.store.getUsedCapacity() === 0) {
@@ -234,7 +222,8 @@ export class HarvesterAI {
     if (targets.length > 0) {
       if (creep.transfer(targets[0], RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
         creep.moveTo(targets[0], {
-          visualizePathStyle: { stroke: '#ffffff' }
+          visualizePathStyle: { stroke: '#ffffff' },
+          reusePath: 10
         });
       }
     } else {
@@ -281,7 +270,8 @@ export class HarvesterAI {
       if (targets.length > 0) {
         if (creep.build(targets[0]) === ERR_NOT_IN_RANGE) {
           creep.moveTo(targets[0], {
-            visualizePathStyle: { stroke: '#ffffff' }
+            visualizePathStyle: { stroke: '#ffffff' },
+            reusePath: 10
           });
         }
       } else {
@@ -311,7 +301,8 @@ export class HarvesterAI {
         
         if (creep.repair(targets[0]) === ERR_NOT_IN_RANGE) {
           creep.moveTo(targets[0], {
-            visualizePathStyle: { stroke: '#ffffff' }
+            visualizePathStyle: { stroke: '#ffffff' },
+            reusePath: 10
           });
         }
       } else {

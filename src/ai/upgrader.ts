@@ -23,22 +23,25 @@ export class UpgraderAI {
       creep.say('⚡ upgrade');
     }
     
-    // Working state - upgrade controller
     if (creep.memory.working) {
-      // Verify controller exists and is owned
+      Profiler.start('UpgraderAI.upgrade');
+      // Working state - upgrade controller
       if (creep.room.controller && creep.room.controller.my) {
         if (creep.upgradeController(creep.room.controller) === ERR_NOT_IN_RANGE) {
           creep.moveTo(creep.room.controller, {
-            visualizePathStyle: { stroke: '#ffffff' }
+            visualizePathStyle: { stroke: '#ffffff' },
+            reusePath: 10
           });
         }
       } else {
         // No controller to upgrade in this room
         creep.say('❓ no ctrl');
       }
+      Profiler.end('UpgraderAI.upgrade');
     } 
     // Harvesting state - collect energy
     else {
+      Profiler.start('UpgraderAI.harvest');
       const controller = creep.room.controller;
       // Try to find dropped energy first (closest by path to creep)
       let target = null;
@@ -49,7 +52,8 @@ export class UpgraderAI {
           if (target) {
             if (creep.pickup(target) === ERR_NOT_IN_RANGE) {
               creep.moveTo(target, {
-                visualizePathStyle: { stroke: '#ffaa00' }
+                visualizePathStyle: { stroke: '#ffaa00' },
+                reusePath: 10
               });
             }
             return;
@@ -72,7 +76,8 @@ export class UpgraderAI {
           const bestContainer = containers[0];
           if (creep.withdraw(bestContainer, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
             creep.moveTo(bestContainer, {
-              visualizePathStyle: { stroke: '#ffaa00' }
+              visualizePathStyle: { stroke: '#ffaa00' },
+              reusePath: 10
             });
           }
           return;
@@ -89,7 +94,8 @@ export class UpgraderAI {
           const bestSource = sources[0];
           if (creep.harvest(bestSource) === ERR_NOT_IN_RANGE) {
             creep.moveTo(bestSource, {
-              visualizePathStyle: { stroke: '#ffaa00' }
+              visualizePathStyle: { stroke: '#ffaa00' },
+              reusePath: 10
             });
           }
           return;
@@ -101,13 +107,15 @@ export class UpgraderAI {
       if (fallbackSource) {
         if (creep.harvest(fallbackSource) === ERR_NOT_IN_RANGE) {
           creep.moveTo(fallbackSource, {
-            visualizePathStyle: { stroke: '#ffaa00' }
+            visualizePathStyle: { stroke: '#ffaa00' },
+            reusePath: 10
           });
         }
       } else {
         // No source found
         creep.say('❓ no src');
       }
+      Profiler.end('UpgraderAI.harvest');
     }
   }
 }

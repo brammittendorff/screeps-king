@@ -371,103 +371,144 @@ export class RoomManager {
   }
 
   /**
-   * Plan construction projects for this room
+   * Try to place the next construction site from the build queue
    */
-  private static planRoomConstruction(room: Room): void {
-    // Skip if we're at construction site limit
+  private static processBuildQueue(room: Room): void {
+    if (!room.memory.constructionQueue) return;
     const constructionSites = _.filter(Game.constructionSites, site => site.room && site.room.name === room.name);
     if (constructionSites.length >= 10) return;
-    
-    // Check if we need to build extensions
+    while (room.memory.constructionQueue.length > 0 && constructionSites.length < 10) {
+      const next = room.memory.constructionQueue[0];
+      const result = room.createConstructionSite(next.x, next.y, next.structureType);
+      if (result === OK) {
+        Logger.info(`Placed construction site for ${next.structureType} at (${next.x},${next.y}) in ${room.name}`);
+        room.memory.constructionQueue.shift();
+      } else if (result === ERR_INVALID_TARGET || result === ERR_FULL || result === ERR_INVALID_ARGS) {
+        // Remove invalid/blocked positions
+        Logger.warn(`Failed to place construction site at (${next.x},${next.y}) in ${room.name}: ${result}`);
+        room.memory.constructionQueue.shift();
+      } else {
+        // Wait and try again next tick
+        break;
+      }
+    }
+  }
+
+  /**
+   * Find the largest open area for extension placement
+   * Returns an array of positions sorted by best cluster
+   */
+  private static findBestExtensionCluster(room: Room, count: number): {x: number, y: number}[] {
+    const terrain = new Room.Terrain(room.name);
+    const spawns = room.find(FIND_MY_SPAWNS);
+    if (spawns.length === 0) return [];
+    const spawn = spawns[0];
+    const range = 10;
+    const openTiles: {x: number, y: number}[] = [];
+    // Scan a square around the spawn
+    for (let dx = -range; dx <= range; dx++) {
+      for (let dy = -range; dy <= range; dy++) {
+        const x = spawn.pos.x + dx;
+        const y = spawn.pos.y + dy;
+        if (x < 2 || x > 47 || y < 2 || y > 47) continue;
+        if (terrain.get(x, y) !== 0) continue;
+        // Check for existing structures/sites
+        const structures = room.lookForAt(LOOK_STRUCTURES, x, y);
+        const sites = room.lookForAt(LOOK_CONSTRUCTION_SITES, x, y);
+        if (structures.length === 0 && sites.length === 0) {
+          openTiles.push({x, y});
+        }
+      }
+    }
+    // Cluster open tiles by proximity
+    const clusters: {tiles: {x: number, y: number}[], center: {x: number, y: number}}[] = [];
+    for (const tile of openTiles) {
+      let added = false;
+      for (const cluster of clusters) {
+        for (const cTile of cluster.tiles) {
+          if (Math.abs(cTile.x - tile.x) <= 1 && Math.abs(cTile.y - tile.y) <= 1) {
+            cluster.tiles.push(tile);
+            added = true;
+            break;
+          }
+        }
+        if (added) break;
+      }
+      if (!added) {
+        clusters.push({tiles: [tile], center: tile});
+      }
+    }
+    // Score clusters by size and proximity to spawn
+    clusters.sort((a, b) => {
+      if (b.tiles.length !== a.tiles.length) return b.tiles.length - a.tiles.length;
+      const aDist = Math.abs(a.center.x - spawn.pos.x) + Math.abs(a.center.y - spawn.pos.y);
+      const bDist = Math.abs(b.center.x - spawn.pos.x) + Math.abs(b.center.y - spawn.pos.y);
+      return aDist - bDist;
+    });
+    if (clusters.length === 0) return [];
+    // Return up to 'count' best positions from the best cluster
+    return clusters[0].tiles.slice(0, count);
+  }
+
+  /**
+   * Plan construction projects for this room using a persistent build queue and scoring
+   */
+  private static planRoomConstruction(room: Room): void {
+    // Ensure build queue exists
+    if (!room.memory.constructionQueue) room.memory.constructionQueue = [];
+    // Always try to process the build queue first
+    this.processBuildQueue(room);
+    // If queue is not empty, don't plan new projects
+    if (room.memory.constructionQueue.length > 0) return;
+    const constructionSites = _.filter(Game.constructionSites, site => site.room && site.room.name === room.name);
+    if (constructionSites.length >= 10) return;
+    // Plan extensions
     if (room.controller.level >= 2) {
-      const extensions = room.find(FIND_MY_STRUCTURES, {
-        filter: { structureType: STRUCTURE_EXTENSION }
-      });
-      
+      const extensions = room.find(FIND_MY_STRUCTURES, { filter: { structureType: STRUCTURE_EXTENSION } });
       const maxExtensions = CONTROLLER_STRUCTURES[STRUCTURE_EXTENSION][room.controller.level];
-      
-      if (extensions.length < maxExtensions) {
-        // We need more extensions, find a good spot near spawn
-        const spawns = room.find(FIND_MY_SPAWNS);
-        if (spawns.length > 0) {
-          const spawn = spawns[0];
-          
-          // Create a spiral pattern around spawn
-          const positions = [];
-          const maxRadius = 5;
-          
-          for (let radius = 2; radius <= maxRadius; radius++) {
-            for (let dx = -radius; dx <= radius; dx++) {
-              for (let dy = -radius; dy <= radius; dy++) {
-                // Only consider the perimeter
-                if (Math.abs(dx) === radius || Math.abs(dy) === radius) {
-                  const x = spawn.pos.x + dx;
-                  const y = spawn.pos.y + dy;
-                  
-                  // Check if position is valid
-                  if (x >= 0 && x < 50 && y >= 0 && y < 50) {
-                    positions.push({x, y});
-                  }
-                }
-              }
-            }
-          }
-          
-          // Try each position until we find a valid one
-          for (const pos of positions) {
-            const result = room.createConstructionSite(pos.x, pos.y, STRUCTURE_EXTENSION);
-            if (result === OK) {
-              Logger.info(`Created extension construction site at ${pos.x},${pos.y} in ${room.name}`);
-              break;
-            }
-          }
+      const needed = maxExtensions - extensions.length;
+      if (needed > 0) {
+        const best = this.findBestExtensionCluster(room, needed);
+        for (const pos of best) {
+          room.memory.constructionQueue.push({x: pos.x, y: pos.y, structureType: STRUCTURE_EXTENSION});
+        }
+        if (best.length > 0) {
+          Logger.info(`Planned ${best.length} extensions in ${room.name} (build queue)`);
         }
       }
     }
-    
-    // Check if we need to build towers
+    // Plan towers
     if (room.controller.level >= 3) {
-      const towers = room.find(FIND_MY_STRUCTURES, {
-        filter: { structureType: STRUCTURE_TOWER }
-      });
-      
+      const towers = room.find(FIND_MY_STRUCTURES, { filter: { structureType: STRUCTURE_TOWER } });
+      const towerSites = room.find(FIND_MY_CONSTRUCTION_SITES, { filter: s => s.structureType === STRUCTURE_TOWER });
       const maxTowers = CONTROLLER_STRUCTURES[STRUCTURE_TOWER][room.controller.level];
-      
-      if (towers.length < maxTowers) {
-        // We need more towers, find a good spot
-        const spawns = room.find(FIND_MY_SPAWNS);
-        if (spawns.length > 0) {
-          const spawn = spawns[0];
-          
-          // Place tower 3 tiles away from spawn
-          const positions = [
-            {x: spawn.pos.x, y: spawn.pos.y - 3},
-            {x: spawn.pos.x + 3, y: spawn.pos.y},
-            {x: spawn.pos.x, y: spawn.pos.y + 3},
-            {x: spawn.pos.x - 3, y: spawn.pos.y}
-          ];
-          
-          for (const pos of positions) {
-            const result = room.createConstructionSite(pos.x, pos.y, STRUCTURE_TOWER);
-            if (result === OK) {
-              Logger.info(`Created tower construction site at ${pos.x},${pos.y} in ${room.name}`);
-              break;
-            }
+      const neededTowers = maxTowers - towers.length - towerSites.length;
+      if (neededTowers > 0) {
+        // Find best open cluster, but avoid overlap with planned extensions
+        const plannedExts = new Set(room.memory.constructionQueue.filter(q => q.structureType === STRUCTURE_EXTENSION).map(q => `${q.x},${q.y}`));
+        const best = this.findBestExtensionCluster(room, neededTowers * 2); // Get more candidates
+        let planned = 0;
+        for (const pos of best) {
+          if (planned >= neededTowers) break;
+          if (!plannedExts.has(`${pos.x},${pos.y}`)) {
+            room.memory.constructionQueue.push({x: pos.x, y: pos.y, structureType: STRUCTURE_TOWER});
+            planned++;
           }
+        }
+        if (planned > 0) {
+          Logger.info(`Planned ${planned} towers in ${room.name} (build queue)`);
         }
       }
     }
-    
-    // Check if we need to build storage
+    // Plan storage
     if (room.controller.level >= 4 && !room.storage) {
-      const spawns = room.find(FIND_MY_SPAWNS);
-      if (spawns.length > 0) {
-        const spawn = spawns[0];
-        
-        // Place storage 4 tiles away from spawn
-        const result = room.createConstructionSite(spawn.pos.x, spawn.pos.y + 4, STRUCTURE_STORAGE);
-        if (result === OK) {
-          Logger.info(`Created storage construction site in ${room.name}`);
+      const storageSites = room.find(FIND_MY_CONSTRUCTION_SITES, { filter: s => s.structureType === STRUCTURE_STORAGE });
+      if (storageSites.length === 0) {
+        // Place storage in the largest open cluster near spawn
+        const best = this.findBestExtensionCluster(room, 1);
+        if (best.length > 0) {
+          room.memory.constructionQueue.push({x: best[0].x, y: best[0].y, structureType: STRUCTURE_STORAGE});
+          Logger.info(`Planned storage at (${best[0].x},${best[0].y}) in ${room.name} (build queue)`);
         }
       }
     }

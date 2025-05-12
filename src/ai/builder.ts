@@ -70,16 +70,24 @@ export class BuilderAI {
     // State machine for builder behavior
     switch (memory.activity as BuilderState) {
       case BuilderState.Harvesting:
+        Profiler.start('BuilderAI.harvesting');
         this.doHarvesting(creep);
+        Profiler.end('BuilderAI.harvesting');
         break;
       case BuilderState.Building:
+        Profiler.start('BuilderAI.building');
         this.doBuilding(creep);
+        Profiler.end('BuilderAI.building');
         break;
       case BuilderState.Repairing:
+        Profiler.start('BuilderAI.repairing');
         this.doRepairing(creep);
+        Profiler.end('BuilderAI.repairing');
         break;
       case BuilderState.Upgrading:
+        Profiler.start('BuilderAI.upgrading');
         this.doUpgrading(creep);
+        Profiler.end('BuilderAI.upgrading');
         break;
       default:
         // Reset to harvesting
@@ -115,7 +123,8 @@ export class BuilderAI {
       if (closestResource) {
         if (creep.pickup(closestResource) === ERR_NOT_IN_RANGE) {
           creep.moveTo(closestResource, {
-            visualizePathStyle: { stroke: '#ffaa00' }
+            visualizePathStyle: { stroke: '#ffaa00' },
+            reusePath: 10
           });
         }
         return;
@@ -134,7 +143,8 @@ export class BuilderAI {
       if (closestContainer) {
         if (creep.withdraw(closestContainer, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
           creep.moveTo(closestContainer, {
-            visualizePathStyle: { stroke: '#ffaa00' }
+            visualizePathStyle: { stroke: '#ffaa00' },
+            reusePath: 10
           });
         }
         return;
@@ -145,7 +155,8 @@ export class BuilderAI {
     if (creep.room.storage && creep.room.storage.store.getUsedCapacity(RESOURCE_ENERGY) > 1000) {
       if (creep.withdraw(creep.room.storage, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
         creep.moveTo(creep.room.storage, {
-          visualizePathStyle: { stroke: '#ffaa00' }
+          visualizePathStyle: { stroke: '#ffaa00' },
+          reusePath: 10
         });
       }
       return;
@@ -194,7 +205,8 @@ export class BuilderAI {
     
     if (result === ERR_NOT_IN_RANGE) {
       creep.moveTo(targetSource, {
-        visualizePathStyle: { stroke: '#ffaa00' }
+        visualizePathStyle: { stroke: '#ffaa00' },
+        reusePath: 10
       });
     }
   }
@@ -223,7 +235,8 @@ export class BuilderAI {
       
       if (creep.build(target) === ERR_NOT_IN_RANGE) {
         creep.moveTo(target, {
-          visualizePathStyle: { stroke: '#ffffff' }
+          visualizePathStyle: { stroke: '#ffffff' },
+          reusePath: 10
         });
       }
     } else {
@@ -266,7 +279,8 @@ export class BuilderAI {
       
       if (creep.repair(damagedStructures[0]) === ERR_NOT_IN_RANGE) {
         creep.moveTo(damagedStructures[0], {
-          visualizePathStyle: { stroke: '#ffffff' }
+          visualizePathStyle: { stroke: '#ffffff' },
+          reusePath: 10
         });
       }
     } else {
@@ -302,7 +316,8 @@ export class BuilderAI {
     if (creep.room.controller) {
       if (creep.upgradeController(creep.room.controller) === ERR_NOT_IN_RANGE) {
         creep.moveTo(creep.room.controller, {
-          visualizePathStyle: { stroke: '#ffffff' }
+          visualizePathStyle: { stroke: '#ffffff' },
+          reusePath: 10
         });
       }
     } else {
