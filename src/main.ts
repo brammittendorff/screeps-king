@@ -520,6 +520,14 @@ export function loop(): void {
       Logger.error(`Error pruning scouted rooms: ${(e as Error).stack || (e as Error).message}`);
     }
     
+    // Suicide all creeps that are not in Memory.creeps
+    for (const name in Game.creeps) {
+      if (!Memory.creeps[name]) {
+        console.log(`[Cleanup] Suiciding creep not in memory: ${name}`);
+        Game.creeps[name].suicide();
+      }
+    }
+    
   } catch (e) {
     Logger.error(`Critical error in main loop: ${(e as Error).stack || (e as Error).message}`);
   }
