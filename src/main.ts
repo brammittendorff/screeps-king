@@ -17,6 +17,7 @@ import { AI } from './ai';
 import * as _ from 'lodash';
 import { MarketTrends } from './utils/market-trends';
 import { RoomCache } from './utils/room-cache';
+import { globalInit } from './global';
 
 // Initialize global objects to maintain compatibility with the old code
 global.ai = AI as any;
@@ -199,6 +200,7 @@ function getOrCreate<T>(obj: any, key: string, def: T): T {
 
 // Main game loop
 export function loop(): void {
+  globalInit();
   RoomCache.clear();
   delete global.RoomCache;
 
