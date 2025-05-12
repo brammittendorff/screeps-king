@@ -6,7 +6,6 @@
 
 import { CONFIG } from './config';
 import { Logger } from './utils/logger';
-import { Profiler } from './utils/profiler';
 import { StatsDisplay } from './utils/stats-display';
 import { MemoryManager } from './managers/memory-manager';
 import { CreepManager } from './managers/creep-manager';
@@ -17,6 +16,7 @@ import { TaskManager } from './managers/task-manager';
 import { AI } from './ai';
 import * as _ from 'lodash';
 import { MarketTrends } from './utils/market-trends';
+import { RoomCache } from './utils/room-cache';
 
 // Initialize global objects to maintain compatibility with the old code
 global.ai = AI as any;
@@ -191,20 +191,153 @@ global.controller = {
   }
 };
 
+// Utility: Safe get/set for nested memory
+function getOrCreate<T>(obj: any, key: string, def: T): T {
+  if (!obj[key]) obj[key] = def;
+  return obj[key];
+}
+
 // Main game loop
 export function loop(): void {
-  // Log total creeps and breakdown by role
-  const creeps = Object.values(Game.creeps);
-  const roleCounts: Record<string, number> = {};
-  for (const creep of creeps) {
-    const role = creep.memory.role || 'unknown';
-    roleCounts[role] = (roleCounts[role] || 0) + 1;
-  }
-  console.log(`[Creeps] Total: ${creeps.length} | Breakdown: ` + Object.entries(roleCounts).map(([role, count]) => `${role}: ${count}`).join(', '));
+  RoomCache.clear();
+  delete global.RoomCache;
 
-  Profiler.enable(); // Ensure profiler is enabled every tick
-  Logger.info(`GCL: ${Game.gcl.level} (${(Game.gcl.progress / Game.gcl.progressTotal * 100).toFixed(2)}%)`, 'GCL');
-  Profiler.start('main');
+  // Only update all creeps' memory if config version changed (on new build)
+  if (!Memory.lastCreepMemoryUpdateVersion || Memory.lastCreepMemoryUpdateVersion !== CONFIG.VERSION) {
+    MemoryManager.updateAllCreepMemory();
+    Memory.lastCreepMemoryUpdateVersion = CONFIG.VERSION;
+    console.log(`[MemoryManager] Updated all creep memory for new config version: ${CONFIG.VERSION}`);
+    // Clean up old/orphaned creep memory
+    for (const name in Memory.creeps) {
+      if (!Game.creeps[name]) {
+        delete Memory.creeps[name];
+      }
+    }
+    console.log('[MemoryManager] Cleaned up orphaned creep memory after deploy.');
+  }
+
+  // Only call cleanup on managers that have it
+  if (Game.time % 20 === 0) {
+    try { MemoryManager.cleanup(); } catch (e) { Logger.error(`Error in MemoryManager.cleanup: ${(e as Error).stack || (e as Error).message}`); }
+    try { TaskManager.cleanup(); } catch (e) { Logger.error(`Error in TaskManager.cleanup: ${(e as Error).stack || (e as Error).message}`); }
+    try { ColonyManager.cleanup(); } catch (e) { Logger.error(`Error in ColonyManager.cleanup: ${(e as Error).stack || (e as Error).message}`); }
+    try { StructureManager.cleanup(); } catch (e) { Logger.error(`Error in StructureManager.cleanup: ${(e as Error).stack || (e as Error).message}`); }
+    try { RoomManager.cleanup(); } catch (e) { Logger.error(`Error in RoomManager.cleanup: ${(e as Error).stack || (e as Error).message}`); }
+  }
+  // Only run heavy cleanup every 20 ticks
+  if (Game.time % 20 === 0) {
+    MemoryManager.cleanup();
+    if (global.TaskManager && typeof global.TaskManager.cleanup === 'function') global.TaskManager.cleanup();
+    if (global.StructureManager && typeof global.StructureManager.cleanup === 'function') global.StructureManager.cleanup();
+    if (global.ColonyManager && typeof global.ColonyManager.cleanup === 'function') global.ColonyManager.cleanup();
+  }
+  // Log comprehensive stats and build planning every 100 ticks or if forced
+  if (Game.time % 100 === 0 || Memory.forceStatsLog) {
+    // GCL
+    const gcl = Game.gcl;
+    // CPU
+    const cpu = Game.cpu;
+    // Memory
+    const memSize = RawMemory.get().length / 1024;
+    // Creep stats
+    const creeps = Object.values(Game.creeps);
+    const roleCounts = _.countBy(creeps, c => c.memory.role || 'unknown');
+    // Room stats
+    const ownedRooms = Object.values(Game.rooms).filter(r => r.controller && r.controller.my);
+    const roomStats = ownedRooms.map(r => {
+      const rcl = r.controller.level;
+      const rclPct = (r.controller.progress / r.controller.progressTotal * 100).toFixed(1);
+      const energy = r.energyAvailable;
+      const energyCap = r.energyCapacityAvailable;
+      const storage = r.storage ? r.storage.store[RESOURCE_ENERGY] : 0;
+      // Build planning
+      const buildQueue = r.memory.constructionQueue || [];
+      const nextBuilds = _.countBy(buildQueue, b => b.structureType);
+      const sites = r.find(FIND_MY_CONSTRUCTION_SITES);
+      const siteTypes = _.countBy(sites, s => s.structureType);
+      // Critical missing structures
+      const missing: string[] = [];
+      if (rcl >= 4 && !r.storage) missing.push('Storage');
+      if (rcl >= 6 && !r.terminal) missing.push('Terminal');
+      if (rcl >= 2 && r.find(FIND_MY_STRUCTURES, { filter: s => s.structureType === STRUCTURE_TOWER }).length === 0) missing.push('Tower');
+      // Detailed build queue log
+      let buildQueueLog = '';
+      if (buildQueue.length) {
+        buildQueueLog = '\n  Build Queue:' + buildQueue.map((b: any, i: number) => {
+          const pos = b.pos ? `(${b.pos.x},${b.pos.y})` : '';
+          const tag = b.tag ? ` [${b.tag}]` : '';
+          return `\n    ${i + 1}. ${b.structureType}${pos}${tag}`;
+        }).join('');
+      }
+      return `[${r.name}] RCL${rcl} (${rclPct}%) | E: ${energy}/${energyCap} | Storage: ${storage} | Sites: ${sites.length} (${Object.entries(siteTypes).map(([type, n]) => `${type}:${n}`).join(', ')}) | Next: ${Object.entries(nextBuilds).map(([type, n]) => `${type}:${n}`).join(', ')}${missing.length ? ' | Missing: ' + missing.join(', ') : ''}${buildQueueLog}`;
+    }).join(' | ');
+    // Construction site limit
+    const totalSites = Object.values(Game.rooms).reduce((sum, r) => sum + r.find(FIND_MY_CONSTRUCTION_SITES).length, 0);
+    // Market
+    const credits = Game.market ? Game.market.credits : 0;
+
+    // TaskManager: log all active tasks
+    const allTasks = (global.TaskManager && global.TaskManager['tasks']) ? Object.values(global.TaskManager['tasks']) as import('./managers/task-manager').Task[] : [];
+    const taskTypeCounts: Record<string, number> = {};
+    for (const t of allTasks) {
+      taskTypeCounts[t.type] = (taskTypeCounts[t.type] || 0) + 1;
+    }
+    console.log(`[STATS] Tasks: ${allTasks.length} (${Object.entries(taskTypeCounts).map(([type, n]) => `${type}:${n}`).join(', ')})`);
+    if (allTasks.length > 0) {
+      for (const t of allTasks) {
+        const age = Game.time - t.createdAt;
+        console.log(`  - [${t.type}] Target: ${t.targetId} | Room: ${t.roomName} | Assigned: ${t.assignedCreeps?.join(',') || '-'} | Priority: ${t.priority} | Age: ${age}`);
+      }
+    }
+
+    console.log(`[STATS] GCL:${gcl.level} (${(gcl.progress / gcl.progressTotal * 100).toFixed(2)}%) | CPU: ${cpu.getUsed().toFixed(1)}/${cpu.limit}, Bucket: ${cpu.bucket} | Mem: ${memSize.toFixed(1)}KB`);
+    console.log(`[STATS] Creeps: ${creeps.length} (${Object.entries(roleCounts).map(([role, n]) => `${role}:${n}`).join(', ')})`);
+    console.log(`[STATS] Rooms: Owned: ${ownedRooms.length}`);
+    console.log(roomStats);
+    console.log(`[STATS] Construction sites: ${totalSites}/100 | Market: ${credits} credits`);
+  }
+  // Emergency low-CPU mode: skip non-essential logic if bucket is low
+  if (Game.cpu.bucket < 1000) {
+    // Only run essential creep and room logic
+    for (const name in Game.creeps) {
+      const creep = Game.creeps[name];
+      // Only process 1/3 of creeps per tick (same batching as CreepManager)
+      if (Game.time % 3 !== (parseInt(creep.name.replace(/\D/g, ''), 10) % 3)) continue;
+      try {
+        const role = creep.memory.role;
+        if (role && AI[role] && typeof AI[role].task === 'function') {
+          AI[role].task(creep);
+        } else {
+          AI.harvester.task(creep);
+        }
+      } catch (e) {
+        // Ignore errors in emergency mode
+      }
+    }
+    for (const roomName in Game.rooms) {
+      const room = Game.rooms[roomName];
+      if (room.controller && room.controller.my) {
+        try {
+          RoomManager.runRoomLogic(room);
+        } catch (e) {
+          // Ignore errors in emergency mode
+        }
+      }
+    }
+    // Skip all other logic
+    return;
+  }
+
+  // Per-tick heartbeat log
+  const isStatsTick = Game.time % 100 === 0 || Memory.forceStatsLog;
+  const gcl = Game.gcl;
+  const creeps = Object.values(Game.creeps);
+  const cpu = Game.cpu;
+  const memSize = RawMemory.get().length / 1024;
+  const tickMark = isStatsTick ? '*' : '';
+  const ticksToNextStats = isStatsTick ? 'NOW' : (100 - (Game.time % 100));
+  
+  console.log(`[TICK ${Game.time}${tickMark}] GCL: ${gcl.level} (${(gcl.progress / gcl.progressTotal * 100).toFixed(2)}%) | Creeps: ${creeps.length} | CPU: ${cpu.getUsed().toFixed(1)}/${cpu.limit} | Mem: ${memSize.toFixed(0)}KB | NextStats: ${ticksToNextStats}`);
 
   try {
     // Initialize logger on first run
@@ -225,7 +358,7 @@ export function loop(): void {
 
       // If this is a new build, reset all build-related state
       if (isNewBuild) {
-        Logger.info(`[WEBPACK-BUILD] 🔶 Screeps-King TypeScript v${require('../package.json').version} running - NEW BUILD DETECTED! Resetting build state - Build ID: ${currentBuildId} - Tick ${Game.time}`);
+        Logger.info(`[WEBPACK-BUILD] 🔶 Screeps-King TypeScript v${CONFIG.VERSION} running - NEW BUILD DETECTED! Resetting build state - Build ID: ${currentBuildId} - Tick ${Game.time}`);
 
         // Setup global help command
         // @ts-ignore - adding to global object
@@ -290,7 +423,7 @@ export function loop(): void {
           }
         }
       } else {
-        Logger.info(`[WEBPACK-BUILD] 🔶 Screeps-King TypeScript v${require('../package.json').version} running - Build ID: ${currentBuildId} - Tick ${Game.time}`);
+        Logger.info(`[WEBPACK-BUILD] 🔶 Screeps-King TypeScript v${CONFIG.VERSION} running - Build ID: ${currentBuildId} - Tick ${Game.time}`);
       }
 
       Memory.buildId = currentBuildId;
@@ -305,13 +438,10 @@ export function loop(): void {
     
     // Clean up memory
     if (Game.time % 20 === 0) {
-      Profiler.start('memory_cleanup');
       MemoryManager.cleanup();
-      Profiler.end('memory_cleanup');
     }
     
     // Update memory
-    Profiler.start('memory_update');
     
     // Update creep memory
     _.forEach(Game.creeps, (creep) => {
@@ -331,32 +461,20 @@ export function loop(): void {
       }
     });
     
-    Profiler.end('memory_update');
-    
     // Process colony (multi-room coordination)
-    Profiler.start('colony');
     ColonyManager.run();
-    Profiler.end('colony');
     
     // Process creeps
-    Profiler.start('creeps');
     CreepManager.runCreeps();
-    Profiler.end('creeps');
     
     // Process rooms
-    Profiler.start('rooms');
     RoomManager.runRooms();
-    Profiler.end('rooms');
     
     // Process structures
-    Profiler.start('structures');
     StructureManager.runStructures();
-    Profiler.end('structures');
     
     // Process spawning
-    Profiler.start('spawning');
     CreepManager.processSpawns();
-    Profiler.end('spawning');
     
     // Request scouts occasionally to explore the map
     if (Game.time % 1000 === 0) {
@@ -365,19 +483,12 @@ export function loop(): void {
     
     // Process tasks
     if (Game.time % 5 === 0) {
-      Profiler.start('tasks');
       TaskManager.cleanup();
-      Profiler.end('tasks');
     }
     
     // Save tasks to memory
     TaskManager.save();
     
-    // Display profiler results
-    if (Game.time % 100 === 0) {
-      Profiler.report();
-    }
-
     // Display stats every 10 ticks, but not on the same tick as profiler to avoid clutter
     if (Game.time % 10 === 5 && Memory.enableStats) {
       StatsDisplay.showStats();
@@ -386,9 +497,29 @@ export function loop(): void {
     // Update market trends every 1000 ticks
     MarketTrends.update();
     
+    // Log task analytics every 500 ticks (was 100)
+    if (Game.time % 500 === 0) {
+      TaskManager.logAnalytics();
+    }
+    
+    // Keep only the last 20 most recently seen scouted rooms, robust and type-safe
+    try {
+      const colony = getOrCreate(Memory, 'colony', {});
+      const rooms = getOrCreate(colony, 'rooms', {});
+      // Type assertion for scouted
+      const scouted = getOrCreate(rooms, 'scouted', {}) as Record<string, { lastSeen: number }>;
+      const validEntries = Object.entries(scouted)
+        .filter(([room, data]) =>
+          typeof room === 'string' &&
+          data && typeof (data as any).lastSeen === 'number'
+        )
+        .sort((a, b) => (b[1] as any).lastSeen - (a[1] as any).lastSeen);
+      (rooms as any).scouted = Object.fromEntries(validEntries.slice(0, 20));
+    } catch (e) {
+      Logger.error(`Error pruning scouted rooms: ${(e as Error).stack || (e as Error).message}`);
+    }
+    
   } catch (e) {
     Logger.error(`Critical error in main loop: ${(e as Error).stack || (e as Error).message}`);
   }
-  
-  Profiler.end('main');
 }

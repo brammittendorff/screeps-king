@@ -48,20 +48,14 @@ export class Logger {
    * Log an error message
    */
   public static error(message: string, context?: string): void {
-    if (this.level >= LogLevel.ERROR) {
-      const contextStr = context ? `[${context}]` : '';
-      console.log(`<span style="color:${this.colors.ERROR}">[ERROR]${contextStr} ${message}</span>`);
-    }
+    // No-op: logging removed
   }
 
   /**
    * Log a warning message
    */
   public static warn(message: string, context?: string): void {
-    if (this.level >= LogLevel.WARNING) {
-      const contextStr = context ? `[${context}]` : '';
-      console.log(`<span style="color:${this.colors.WARN}">[WARN]${contextStr} ${message}</span>`);
-    }
+    // No-op: logging removed
   }
 
   /**

@@ -5,11 +5,11 @@
  */
 
 import { Logger } from '../utils/logger';
-import { Profiler } from '../utils/profiler';
 import { Helpers } from '../utils/helpers';
 import { ScoutHelper } from '../utils/scout-helper';
 import * as _ from 'lodash';
 import { AI } from '../ai';
+import { RoomCache } from '../utils/room-cache';
 
 export enum CreepRole {
   Harvester = 'harvester',
@@ -82,14 +82,11 @@ export class CreepManager {
     
     // Sort by priority (highest first)
     this.spawnQueue[request.roomName].sort((a, b) => b.priority - a.priority);
-    
-    Logger.debug(`Requested ${request.role} creep in ${request.roomName} with priority ${request.priority}`);
   }
   
   /**
    * Process the spawn queue for all rooms
    */
-  @Profiler.wrap('CreepManager.processSpawns')
   public static processSpawns(): void {
     for (const roomName in this.spawnQueue) {
       const room = Game.rooms[roomName];
@@ -114,14 +111,11 @@ export class CreepManager {
       if (result === OK) {
         // Remove the request from the queue
         this.spawnQueue[roomName].shift();
-        Logger.info(`Spawning ${request.role} in ${roomName}`);
       } else if (result === ERR_NOT_ENOUGH_ENERGY) {
         // Keep the request but don't try again this tick
-        Logger.debug(`Not enough energy to spawn ${request.role} in ${roomName}`);
       } else {
         // Something went wrong, remove the request
         this.spawnQueue[roomName].shift();
-        Logger.warn(`Failed to spawn ${request.role} in ${roomName}: ${result}`);
       }
     }
   }
@@ -129,7 +123,6 @@ export class CreepManager {
   /**
    * Process all creeps based on their roles
    */
-  @Profiler.wrap('CreepManager.runCreeps')
   public static runCreeps(): void {
     // Reset creep counts
     this.resetCreepCounts();
@@ -142,6 +135,8 @@ export class CreepManager {
     // Add all creeps to their respective rooms
     for (const name in Game.creeps) {
       const creep = Game.creeps[name];
+      // --- BATCHING: Only process 1/3 of creeps per tick ---
+      if (Game.time % 3 !== (parseInt(creep.name.replace(/\D/g, ''), 10) % 3)) continue;
       
       // --- ROAD HEATMAP TRACKING ---
       const room = creep.room;
@@ -207,6 +202,9 @@ export class CreepManager {
             if (Object.keys(room.memory.roadHeatmap[x]).length === 0) {
               delete room.memory.roadHeatmap[x];
             }
+          }
+          if (Object.keys(room.memory.roadHeatmap).length === 0) {
+            delete room.memory.roadHeatmap;
           }
         }
       }
@@ -363,7 +361,8 @@ export class CreepManager {
           AI.harvester.task(creep);
         }
       } catch (e) {
-        Logger.error(`Error running creep ${creep.name}: ${(e as Error).message}`);
+        // Something went wrong, remove the request
+        this.spawnQueue[roomName].shift();
       }
     }
   }
@@ -383,7 +382,6 @@ export class CreepManager {
           creep.moveTo(exit, { reusePath: 20 });
         }
       }
-      return;
     }
     
     // If we're in the target room, reserve the controller
@@ -409,11 +407,9 @@ export class CreepManager {
     // State transitions
     if (!creep.memory.working && creep.store.getFreeCapacity() === 0) {
       creep.memory.working = true;
-      creep.say('🔄 deliver');
     }
     if (creep.memory.working && creep.store.getUsedCapacity() === 0) {
       creep.memory.working = false;
-      creep.say('🔄 collect');
     }
 
     // DELIVERING
@@ -425,7 +421,6 @@ export class CreepManager {
           const exit = creep.pos.findClosestByRange(exitDir as FindConstant);
           if (exit) creep.moveTo(exit, { reusePath: 20 });
         }
-        return;
       }
       // Find best delivery target
       let target: Structure | null = null;
@@ -460,9 +455,7 @@ export class CreepManager {
                         (creep.room.find(FIND_MY_SPAWNS)[0]?.pos) ||
                         new RoomPosition(25, 25, creep.room.name);
         creep.moveTo(idlePos, { reusePath: 20 });
-        creep.say('❓ idle');
       }
-      return;
     }
 
     // COLLECTING
@@ -473,7 +466,6 @@ export class CreepManager {
         const exit = creep.pos.findClosestByRange(exitDir as FindConstant);
         if (exit) creep.moveTo(exit, { reusePath: 20 });
       }
-      return;
     }
     // Find best source (container/storage with most energy)
     let sources = creep.room.find(FIND_STRUCTURES, {
@@ -486,7 +478,6 @@ export class CreepManager {
       if (creep.withdraw(sources[0], RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
         creep.moveTo(sources[0], { reusePath: 20 });
       }
-      return;
     }
     // Fallback: dropped energy
     const dropped = creep.pos.findClosestByPath(FIND_DROPPED_RESOURCES, {
@@ -496,14 +487,12 @@ export class CreepManager {
       if (creep.pickup(dropped) === ERR_NOT_IN_RANGE) {
         creep.moveTo(dropped, { reusePath: 20 });
       }
-      return;
     }
     // Nothing to collect, idle at a safe spot
     const idlePos = (creep.room.storage && creep.room.storage.pos) ||
                     (creep.room.find(FIND_MY_SPAWNS)[0]?.pos) ||
                     new RoomPosition(25, 25, creep.room.name);
     creep.moveTo(idlePos, { reusePath: 20 });
-    creep.say('❓ idle');
   }
 
   /**
@@ -522,7 +511,6 @@ export class CreepManager {
           });
         }
       }
-      return;
     }
 
     // If we're in the target room, scout it thoroughly
@@ -565,7 +553,6 @@ export class CreepManager {
 
         if (nextRoom && nextRoom !== creep.room.name) {
           creep.memory.targetRoom = nextRoom;
-          creep.say(`Scout: ${nextRoom}`);
         }
       }
     } else if (!creep.memory.targetRoom) {
@@ -576,7 +563,6 @@ export class CreepManager {
         for (const adjRoom in homeRoom.memory.adjacentRooms) {
           if (homeRoom.memory.adjacentRooms[adjRoom].status === 'unexplored') {
             creep.memory.targetRoom = adjRoom;
-            creep.say(`Scout: ${adjRoom}`);
             return;
           }
         }
@@ -585,7 +571,6 @@ export class CreepManager {
       const nextRoom = this.selectNextScoutTarget(creep);
       if (nextRoom) {
         creep.memory.targetRoom = nextRoom;
-        creep.say(`Scout: ${nextRoom}`);
       } else {
         // No rooms to scout, wait in home room
         if (creep.memory.homeRoom && creep.room.name !== creep.memory.homeRoom) {
@@ -753,12 +738,6 @@ export class CreepManager {
   private static logCreepCounts(): void {
     for (const roomName in this.creepCounts) {
       const counts = this.creepCounts[roomName];
-      Logger.info(`Room ${roomName} creep counts: ` +
-        Object.entries(counts)
-          .map(([role, count]) => `${role}: ${count}`)
-          .join(', '),
-        'CreepManager'
-      );
     }
   }
   
@@ -1200,7 +1179,6 @@ export class CreepManager {
           homeRoom: room.name
         }
       });
-      Logger.info(`[${room.name}] Requested defender due to hostiles.`);
       return;
     }
     // ... existing code ...
@@ -1210,6 +1188,26 @@ export class CreepManager {
    * Build a fast RoomProfile for a given room (CPU/memory efficient)
    */
   public static buildRoomProfile(room: Room): RoomProfile {
+    // --- Extension fill tracking for harvester auto-tuning ---
+    if (!room.memory.extensionFillStats) {
+      room.memory.extensionFillStats = { full: 0, empty: 0, ticks: 0 };
+    }
+    const extensions = room.find(FIND_MY_STRUCTURES, { filter: s => s.structureType === STRUCTURE_EXTENSION });
+    const emptyExtensions = extensions.filter(e => e.store.getFreeCapacity(RESOURCE_ENERGY) > 0).length;
+    if (extensions.length > 0) {
+      if (emptyExtensions === 0) {
+        room.memory.extensionFillStats.full++;
+      } else {
+        room.memory.extensionFillStats.empty++;
+      }
+      room.memory.extensionFillStats.ticks++;
+      // Reset stats every 500 ticks for rolling window
+      if (room.memory.extensionFillStats.ticks > 500) {
+        room.memory.extensionFillStats.full = 0;
+        room.memory.extensionFillStats.empty = 0;
+        room.memory.extensionFillStats.ticks = 0;
+      }
+    }
     // Count creeps by role for this room
     const creepCounts: Record<string, number> = {};
     for (const role of Object.values(CreepRole)) {
@@ -1282,6 +1280,20 @@ export class CreepManager {
   public static planCreeps(roomProfile: RoomProfile, empireProfile: EmpireProfile): CreepRequest[] {
     const requests: CreepRequest[] = [];
     const { name, rcl, energyCapacity, storageEnergy, controllerDowngrade, emergency, hostiles, boostedHostiles, constructionSites, damagedStructures, creepCounts } = roomProfile;
+
+    // --- Extension fill auto-tuning for harvesters ---
+    const roomObj = Game.rooms[roomProfile.name];
+    let extensionFillRatio = 1;
+    if (roomObj && roomObj.memory.extensionFillStats && roomObj.memory.extensionFillStats.ticks > 50) {
+      const stats = roomObj.memory.extensionFillStats;
+      extensionFillRatio = stats.full / (stats.full + stats.empty + 1e-6);
+    }
+    // If extensions are often empty, increase harvester count (or hauler if needed)
+    let harvesterBoost = 0;
+    if (extensionFillRatio < 0.7) harvesterBoost = 1;
+    if (extensionFillRatio < 0.4) harvesterBoost = 2;
+    // If extensions are always full, prefer fewer, larger harvesters
+    if (extensionFillRatio > 0.95) harvesterBoost = -1;
 
     // --- SUPER-SAFE FALLBACK: Always ensure at least one harvester and one upgrader ---
     const harvesters = _.filter(Game.creeps, c => c.memory.role === CreepRole.Harvester && c.memory.homeRoom === name);
@@ -1365,7 +1377,6 @@ export class CreepManager {
     idealBody[CreepRole.Upgrader] = maxUpgraderWork * maxUpgraders;
 
     // --- Auto-tuning: Track controller progress per tick ---
-    const roomObj = Game.rooms[name];
     if (roomObj && roomObj.controller && roomObj.controller.my) {
       if (!roomObj.memory.lastControllerProgress) roomObj.memory.lastControllerProgress = 0;
       if (!roomObj.memory.progressHistory) roomObj.memory.progressHistory = [];
@@ -1491,31 +1502,17 @@ export class CreepManager {
         break; // Only one donor per tick for CPU
       }
     }
-    // --- Analytics: Track idle ticks for each role ---
-    if (roomObj && roomObj.controller && roomObj.controller.my) {
-      if (!roomObj.memory.idleTicks) roomObj.memory.idleTicks = {};
-      for (const role of [CreepRole.Harvester, CreepRole.Upgrader, CreepRole.Builder, CreepRole.Hauler]) {
-        if (roomObj.memory.idleTicks[role] === undefined) roomObj.memory.idleTicks[role] = 0;
-        // Count creeps of this role that are idle (not working or not carrying/harvesting/building)
-        const creeps = _.filter(Game.creeps, c => c.memory.role === role && c.memory.homeRoom === name);
-        let idle = 0;
-        for (const creep of creeps) {
-          if (role === CreepRole.Harvester && creep.store.getFreeCapacity() === 0) idle++;
-          if (role === CreepRole.Upgrader && creep.store[RESOURCE_ENERGY] === 0) idle++;
-          if (role === CreepRole.Builder && creep.store[RESOURCE_ENERGY] === 0) idle++;
-          if (role === CreepRole.Hauler && creep.store.getUsedCapacity() === 0) idle++;
-        }
-        roomObj.memory.idleTicks[role] = ((roomObj.memory.idleTicks[role] || 0) + idle) % 1000;
-      }
-    }
     // --- Auto-tune harvesters ---
     let autoTunedHarvesters = desired[CreepRole.Harvester] || 1;
+    autoTunedHarvesters += harvesterBoost;
     if (roomObj) {
       const sources = roomObj.find(FIND_SOURCES);
       const unharvested = sources.filter(s => s.energy > 0).length;
       if (unharvested > 0 && availableEnergy < energyCapacity) autoTunedHarvesters++;
-      if (roomObj.memory.idleTicks && roomObj.memory.idleTicks[CreepRole.Harvester] > 10) autoTunedHarvesters = Math.max(1, autoTunedHarvesters - 1);
     }
+    desired[CreepRole.Harvester] = autoTunedHarvesters;
+    // --- Prefer fewer, larger harvesters if extensions are full ---
+    if (extensionFillRatio > 0.95 && autoTunedHarvesters > 1) autoTunedHarvesters = Math.max(1, Math.floor(autoTunedHarvesters / 2));
     desired[CreepRole.Harvester] = autoTunedHarvesters;
     // --- Auto-tune haulers ---
     let autoTunedHaulers = desired[CreepRole.Hauler] || 0;
@@ -1523,7 +1520,6 @@ export class CreepManager {
       const containers = roomObj.find(FIND_STRUCTURES, { filter: s => s.structureType === STRUCTURE_CONTAINER });
       const fullContainers = containers.filter(c => c.store.getFreeCapacity(RESOURCE_ENERGY) === 0).length;
       if (fullContainers > 0) autoTunedHaulers++;
-      if (roomObj.memory.idleTicks && roomObj.memory.idleTicks[CreepRole.Hauler] > 10) autoTunedHaulers = Math.max(0, autoTunedHaulers - 1);
     }
     desired[CreepRole.Hauler] = autoTunedHaulers;
     // --- Auto-tune builders ---
@@ -1532,29 +1528,9 @@ export class CreepManager {
       const sites = roomObj.find(FIND_MY_CONSTRUCTION_SITES);
       const unfinished = sites.filter(s => s.progress < s.progressTotal).length;
       if (unfinished > 0 && availableEnergy > energyCapacity * 0.5) autoTunedBuilders++;
-      if (roomObj.memory.idleTicks && roomObj.memory.idleTicks[CreepRole.Builder] > 10) autoTunedBuilders = Math.max(0, autoTunedBuilders - 1);
     }
     desired[CreepRole.Builder] = autoTunedBuilders;
-    // --- Analytics logging ---
-    if (Game.time % 100 === 0 && roomObj) {
-      Logger.info(`[Analytics][${name}] Controller progress/tick: ${avgProgress.toFixed(2)}, Energy: ${energyCapacity}, Storage: ${storageEnergy}, IdleTicks: ${JSON.stringify(roomObj.memory.idleTicks)}, CreepCounts: ${JSON.stringify(creepCounts)}`);
-    }
     // --- Debug logging ---
-    if (Game.time % 100 === 0) {
-      Logger.info(`[${roomProfile.name}] Profile: ` + JSON.stringify(roomProfile));
-      Logger.info(`[Empire] Profile: ` + JSON.stringify(empireProfile));
-      Logger.info(`[${roomProfile.name}] Planned creep requests: ` + JSON.stringify(requests.map(r => ({ role: r.role, room: r.roomName, target: r.memory.targetRoom, priority: r.priority }))));
-    }
     return requests;
-  }
-}
-
-// Extend CreepMemory interface for multi-room support
-declare global {
-  interface CreepMemory {
-    homeRoom?: string;         // The room this creep was spawned in
-    targetRoom?: string;       // The room this creep should work in
-    working?: boolean;         // Whether the creep is currently working or gathering resources
-    stage?: number;            // For complex tasks requiring multiple steps
   }
 }

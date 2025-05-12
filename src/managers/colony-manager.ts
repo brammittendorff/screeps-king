@@ -1,6 +1,5 @@
 import { RoomManager } from './room-manager';
 import { Logger } from '../utils/logger';
-import { Profiler } from '../utils/profiler';
 import { ScoutHelper } from '../utils/scout-helper';
 import * as _ from 'lodash';
 
@@ -13,15 +12,18 @@ export class ColonyManager {
   private static roomsByType: {
     owned: string[];
     reserved: string[];
-    scouted: string[];
+    scouted: Record<string, ScoutedRoomMemory>;
   } = {
     owned: [],
     reserved: [],
-    scouted: []
+    scouted: {}
   };
 
   // Colony-wide resource allocation
   private static resourceBalance: { [resource: string]: { [roomName: string]: number } } = {};
+
+  // Analytics: track expansion attempts, successes, failures
+  private static expansionStats: { attempts: number; successes: number; failures: number } = { attempts: 0, successes: 0, failures: 0 };
 
   /**
    * Initialize colony data
@@ -31,7 +33,7 @@ export class ColonyManager {
     this.roomsByType = {
       owned: [],
       reserved: [],
-      scouted: []
+      scouted: {}
     };
     
     this.resourceBalance = {};
@@ -42,7 +44,7 @@ export class ColonyManager {
         rooms: {
           owned: [],
           reserved: [],
-          scouted: []
+          scouted: {}
         },
         resourceBalance: {},
         expansionTargets: [],
@@ -53,13 +55,12 @@ export class ColonyManager {
     // Update from memory
     this.roomsByType.owned = Memory.colony.rooms.owned || [];
     this.roomsByType.reserved = Memory.colony.rooms.reserved || [];
-    this.roomsByType.scouted = Memory.colony.rooms.scouted || [];
+    this.roomsByType.scouted = Memory.colony.rooms.scouted || {};
   }
 
   /**
    * Run the colony management logic
    */
-  @Profiler.wrap('ColonyManager.run')
   public static run(): void {
     try {
       // Update colony status from RoomManager data
@@ -92,7 +93,7 @@ export class ColonyManager {
    */
   private static processExpansionClaiming(): void {
     // Skip if no expansion targets
-    if (!Memory.colony.expansionTargets || Memory.colony.expansionTargets.length === 0) {
+    if (!Memory.colony.expansionTargets || Object.keys(Memory.colony.expansionTargets).length === 0) {
       return;
     }
 
@@ -130,7 +131,7 @@ export class ColonyManager {
     // Check if we already have a claimer en route
     const existingClaimers = _.filter(Game.creeps, (c) =>
       c.memory.role === 'claimer' &&
-      Memory.colony.expansionTargets.includes(c.memory.targetRoom)
+      Object.keys(Memory.colony.expansionTargets).includes(c.memory.targetRoom)
     );
 
     if (existingClaimers.length > 0) {
@@ -144,6 +145,9 @@ export class ColonyManager {
     // Request a claimer
     const room = Game.rooms[bestSourceRoom];
     if (!room) return;
+
+    // Track expansion attempt
+    this.expansionStats.attempts++;
 
     // Check creep limit
     const creepCount = Object.keys(Game.creeps).length;
@@ -174,16 +178,16 @@ export class ColonyManager {
    * Get the best expansion target based on scoring
    */
   private static getBestExpansionTarget(): string | null {
-    if (!Memory.colony.expansionTargets || Memory.colony.expansionTargets.length === 0) {
+    if (!Memory.colony.expansionTargets || Object.keys(Memory.colony.expansionTargets).length === 0) {
       return null;
     }
 
     // Use the first target as default
-    let bestTarget = Memory.colony.expansionTargets[0];
+    let bestTarget = Object.keys(Memory.colony.expansionTargets)[0];
     let bestScore = 0;
 
     // Check each target and score it
-    for (const roomName of Memory.colony.expansionTargets) {
+    for (const roomName of Object.keys(Memory.colony.expansionTargets)) {
       let score = 0;
 
       // Base score from room evaluation
@@ -229,9 +233,8 @@ export class ColonyManager {
         this.roomsByType.owned.push(roomName);
       } else if (roomData.reservedRoom) {
         this.roomsByType.reserved.push(roomName);
-      } else if (roomData.lastSeen > 0) {
-        // Only add to scouted if we've actually seen it
-        this.roomsByType.scouted.push(roomName);
+      } else if (roomData.lastSeen > 0 && Game.rooms[roomName]) { // Only add if currently visible
+        this.roomsByType.scouted[roomName] = { lastSeen: roomData.lastSeen };
       }
     }
     
@@ -418,11 +421,11 @@ export class ColonyManager {
     if (!readyToExpand) return;
 
     // We already have targets, evaluate their status
-    if (Memory.colony.expansionTargets.length > 0) {
+    if (Object.keys(Memory.colony.expansionTargets).length > 0) {
       // Refresh expansion targets list by removing invalid ones and keeping valid ones
       const validTargets: string[] = [];
 
-      for (const targetRoom of Memory.colony.expansionTargets) {
+      for (const targetRoom of Object.keys(Memory.colony.expansionTargets)) {
         const room = Game.rooms[targetRoom];
 
         // If we can see the room, check if it's still a valid target
@@ -451,9 +454,9 @@ export class ColonyManager {
     const potentialTargets: { roomName: string, score: number, sources: number }[] = [];
 
     // Look at scouted rooms for potential targets
-    for (const roomName of this.roomsByType.scouted) {
+    for (const roomName of Object.keys(this.roomsByType.scouted)) {
       // Skip rooms that are already targets
-      if (Memory.colony.expansionTargets.includes(roomName)) continue;
+      if (Object.keys(Memory.colony.expansionTargets).includes(roomName)) continue;
 
       // Get the room if we have visibility
       const room = Game.rooms[roomName];
@@ -490,7 +493,7 @@ export class ColonyManager {
       // Add up to 2 new targets
       for (let i = 0; i < Math.min(2, bestTargets.length); i++) {
         const target = bestTargets[i].roomName;
-        if (!Memory.colony.expansionTargets.includes(target)) {
+        if (!Object.keys(Memory.colony.expansionTargets).includes(target)) {
           Memory.colony.expansionTargets.push(target);
           Logger.info(`Added ${target} as expansion target with score ${bestTargets[i].score}`);
         }
@@ -511,7 +514,7 @@ export class ColonyManager {
   /**
    * Get all rooms in the colony by type
    */
-  public static getRoomsByType(): { owned: string[], reserved: string[], scouted: string[] } {
+  public static getRoomsByType(): { owned: string[], reserved: string[], scouted: Record<string, ScoutedRoomMemory> } {
     return this.roomsByType;
   }
 
@@ -526,7 +529,57 @@ export class ColonyManager {
    * Get expansion targets
    */
   public static getExpansionTargets(): string[] {
-    return Memory.colony.expansionTargets || [];
+    return Object.keys(Memory.colony.expansionTargets) || [];
+  }
+
+  /**
+   * Call this when an expansion is successful (room claimed)
+   */
+  public static markExpansionSuccess(): void {
+    this.expansionStats.successes++;
+  }
+
+  /**
+   * Call this when an expansion fails (claimer lost, etc.)
+   */
+  public static markExpansionFailure(): void {
+    this.expansionStats.failures++;
+  }
+
+  /**
+   * Get expansion analytics
+   */
+  public static getExpansionStats(): { attempts: number; successes: number; failures: number } {
+    return { ...this.expansionStats };
+  }
+
+  /**
+   * Cross-room resource support: modular hook for future AI/task integration
+   */
+  public static crossRoomSupport(): void {
+    // Future: call AI/task system for cross-room hauler/energy support
+  }
+
+  /**
+   * Clean up colony memory for rooms that no longer exist or are not visible for a long time
+   */
+  public static cleanup(): void {
+    if (Memory.colony) {
+      // Prune owned, reserved, scouted rooms
+      ['owned', 'reserved', 'scouted'].forEach((type) => {
+        if (Memory.colony.rooms && Memory.colony.rooms[type]) {
+          Memory.colony.rooms[type] = Object.keys(Memory.colony.rooms[type]).filter((roomName: string) => Game.rooms[roomName]);
+        }
+      });
+      // Prune expansionTargets for rooms that are not normal or not seen for a long time
+      if (Memory.colony.expansionTargets) {
+        Memory.colony.expansionTargets = Object.keys(Memory.colony.expansionTargets).filter((roomName: string) => {
+          const status = Game.map.getRoomStatus(roomName).status;
+          const lastSeen = Memory.roomData && Memory.roomData[roomName] && Memory.roomData[roomName].lastSeen;
+          return status === 'normal' && (!lastSeen || Game.time - lastSeen < 20000);
+        });
+      }
+    }
   }
 }
 
@@ -537,7 +590,7 @@ declare global {
       rooms: {
         owned: string[];
         reserved: string[];
-        scouted: string[];
+        scouted: Record<string, ScoutedRoomMemory>;
       };
       resourceBalance: { [resource: string]: { [roomName: string]: number } };
       expansionTargets: string[];

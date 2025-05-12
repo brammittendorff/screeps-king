@@ -1,11 +1,7 @@
-import { Logger } from '../utils/logger';
-import { Profiler } from '../utils/profiler';
-
 export class ArcherAI {
   /**
    * Main task method for archer creeps
    */
-  @Profiler.wrap('ArcherAI.task')
   public static task(creep: Creep): void {
     // 1. Attack nearest hostile with ranged attack
     const hostile = creep.pos.findClosestByRange(FIND_HOSTILE_CREEPS);

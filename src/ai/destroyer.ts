@@ -1,14 +1,15 @@
 import { Logger } from '../utils/logger';
-import { Profiler } from '../utils/profiler';
 import { getDynamicReusePath } from '../utils/helpers';
+import { RoomCache } from '../utils/room-cache';
 
 export class DestroyerAI {
   /**
    * Main task method for destroyer creeps
    * Prioritizes destroying non-owned spawns, then other hostile structures
    */
-  @Profiler.wrap('DestroyerAI.task')
   public static task(creep: Creep): void {
+    // Batch actions: only run every 3 ticks, staggered by creep name
+    if (Game.time % 3 !== (parseInt(creep.name.replace(/\D/g, ''), 10) % 3)) return;
     // If creep is dying or has no attack parts, fallback to idle
     if (creep.ticksToLive && creep.ticksToLive < 10) {
       creep.say('💀');
@@ -20,7 +21,7 @@ export class DestroyerAI {
     }
 
     // Find all hostile or neutral spawns in the room
-    const targets = creep.room.find(FIND_STRUCTURES, {
+    const targets = RoomCache.get(creep.room, FIND_STRUCTURES, {
       filter: (s: Structure) =>
         s.structureType === STRUCTURE_SPAWN &&
         !(s as StructureSpawn).my
@@ -48,7 +49,7 @@ export class DestroyerAI {
     }
 
     // If no spawns, target other hostile structures (except walls/ramparts)
-    const hostileStructures = creep.room.find(FIND_STRUCTURES, {
+    const hostileStructures = RoomCache.get(creep.room, FIND_STRUCTURES, {
       filter: (s: Structure) =>
         (s.structureType !== STRUCTURE_WALL &&
          s.structureType !== STRUCTURE_RAMPART &&

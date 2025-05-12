@@ -4,29 +4,31 @@
  */
 
 import { Logger } from '../utils/logger';
-import { Profiler } from '../utils/profiler';
 
 export class TowerAI {
   /**
    * Main task method for tower structures
+   * @param tower The tower to control
+   * @param logAction Optional callback for analytics/logging, called with the action taken
    */
-  @Profiler.wrap('TowerAI.task')
-  public static task(tower: StructureTower): void {
+  public static task(tower: StructureTower, logAction?: (action: string) => void): void {
     // The task method is an alias for routine
-    this.routine(tower);
+    this.routine(tower, logAction);
   }
   
   /**
    * Tower routine - prioritize defense, healing, then repair
+   * @param tower The tower to control
+   * @param logAction Optional callback for analytics/logging, called with the action taken
    */
-  @Profiler.wrap('TowerAI.routine')
-  public static routine(tower: StructureTower): void {
+  public static routine(tower: StructureTower, logAction?: (action: string) => void): void {
     // 1. Heal wounded allies
     const wounded = tower.pos.findClosestByRange(FIND_MY_CREEPS, {
       filter: c => c.hits < c.hitsMax
     });
     if (wounded) {
       tower.heal(wounded);
+      if (logAction) logAction('heal');
       return;
     }
     // 2. Attack the most dangerous hostile
@@ -43,6 +45,7 @@ export class TowerAI {
       }
       if (target) {
         tower.attack(target);
+        if (logAction) logAction('attack');
         return;
       }
     }
@@ -53,6 +56,7 @@ export class TowerAI {
     if (ramparts.length > 0) {
       const weakest = ramparts.reduce((a, b) => (a.hits < b.hits ? a : b));
       tower.repair(weakest);
+      if (logAction) logAction('repair');
     }
   }
 }

@@ -4,7 +4,6 @@
  */
 
 import { Logger } from '../utils/logger';
-import { Profiler } from '../utils/profiler';
 import { Helpers } from '../utils/helpers';
 
 declare global {
@@ -14,10 +13,12 @@ declare global {
 }
 
 export class StructureManager {
+  // Track last action for each tower (analytics)
+  private static towerActions: WeakMap<StructureTower, string> = new WeakMap();
+
   /**
    * Run structure operations for all structures
    */
-  @Profiler.wrap('StructureManager.runStructures')
   public static runStructures(): void {
     // Process structures by type for efficiency
     this.runSpawns();
@@ -36,7 +37,7 @@ export class StructureManager {
         try {
           global.controller.structure.routine(structure);
         } catch (e) {
-          Logger.error(`Error in structure routine for ${structure.id}: ${(e as Error).message}`);
+          // Logger.error(`Error in structure routine for ${structure.id}: ${(e as Error).message}`);
         }
       }
     }
@@ -63,7 +64,7 @@ export class StructureManager {
         
         // Other spawn logic as needed
       } catch (e) {
-        Logger.error(`Error running spawn ${name}: ${(e as Error).message}`);
+        // Logger.error(`Error running spawn ${name}: ${(e as Error).message}`);
       }
     }
   }
@@ -75,56 +76,27 @@ export class StructureManager {
     // Find all towers
     for (const id in Game.structures) {
       const structure = Game.structures[id];
-      
       if (structure.structureType === STRUCTURE_TOWER) {
         const tower = structure as StructureTower;
-        
         try {
-          // Run tower AI if available
-          if (global.ai.tower && global.ai.tower.task) {
-            global.ai.tower.task(tower);
+          // Always use modular AI if available
+          if (global.ai.tower && typeof global.ai.tower.task === 'function') {
+            // Provide a callback to record the action
+            global.ai.tower.task(tower, (action: string) => {
+              StructureManager.towerActions.set(tower, action);
+            });
+            // Add analytics/logging for tower actions
+            const lastAction = StructureManager.towerActions.get(tower);
+            if (lastAction) {
+              // Logger.info(`[Tower][${tower.room.name}] Tower ${tower.id} action: ${lastAction}`);
+            }
           } else {
-            // Fallback tower logic
-            this.defaultTowerLogic(tower);
+            // Log if no AI is available
+            // Logger.warn(`No modular AI for tower ${tower.id}`);
           }
         } catch (e) {
-          Logger.error(`Error running tower ${id}: ${(e as Error).message}`);
+          // Logger.error(`Error running tower ${id}: ${(e as Error).message}`);
         }
-      }
-    }
-  }
-  
-  /**
-   * Default tower logic if the AI module is not available
-   */
-  private static defaultTowerLogic(tower: StructureTower): void {
-    // Prioritize healing, then attack, then repair
-    const closestDamagedCreep = tower.pos.findClosestByRange(FIND_MY_CREEPS, {
-      filter: (creep) => creep.hits < creep.hitsMax
-    });
-    
-    if (closestDamagedCreep) {
-      tower.heal(closestDamagedCreep);
-      return;
-    }
-    
-    const closestHostile = tower.pos.findClosestByRange(FIND_HOSTILE_CREEPS);
-    if (closestHostile) {
-      tower.attack(closestHostile);
-      return;
-    }
-    
-    // Only repair if tower has > 50% energy
-    if (tower.store.getUsedCapacity(RESOURCE_ENERGY) > tower.store.getCapacity(RESOURCE_ENERGY) * 0.5) {
-      const closestDamagedStructure = tower.pos.findClosestByRange(FIND_STRUCTURES, {
-        filter: (s) => s.hits < s.hitsMax && 
-                      s.hits < 10000 && // Don't fully repair walls/ramparts
-                      s.structureType !== STRUCTURE_WALL && 
-                      s.structureType !== STRUCTURE_RAMPART
-      });
-      
-      if (closestDamagedStructure) {
-        tower.repair(closestDamagedStructure);
       }
     }
   }
@@ -272,5 +244,27 @@ export class StructureManager {
     }
     
     return structure.hits < structure.hitsMax * threshold;
+  }
+
+  /**
+   * Clean up containers and links memory for non-existing structures
+   */
+  public static cleanup(): void {
+    // Clean up containers
+    if (Memory.containers) {
+      for (const id in Memory.containers) {
+        if (!Game.getObjectById(id as Id<StructureContainer>)) {
+          delete Memory.containers[id];
+        }
+      }
+    }
+    // Clean up links
+    if (Memory.links) {
+      for (const id in Memory.links) {
+        if (!Game.getObjectById(id as Id<StructureLink>)) {
+          delete Memory.links[id];
+        }
+      }
+    }
   }
 }

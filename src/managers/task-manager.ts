@@ -3,9 +3,6 @@
  * Handles task creation, assignment, and execution
  */
 
-import { Logger } from '../utils/logger';
-import { Profiler } from '../utils/profiler';
-
 export enum TaskType {
   Harvest = 'harvest',
   Upgrade = 'upgrade',
@@ -44,6 +41,8 @@ export interface Task {
 export class TaskManager {
   private static tasks: Record<string, Task> = {};
   private static creepTasks: Record<string, string> = {};
+  // Analytics: track task completion, failures, idle time
+  private static taskStats: { completed: number; failed: number; idle: number } = { completed: 0, failed: 0, idle: 0 };
   
   /**
    * Initialize the task manager
@@ -71,7 +70,17 @@ export class TaskManager {
    * Save tasks to Memory
    */
   public static save(): void {
-    Memory.tasks = this.tasks as any;
+    // Only save active tasks (not completed/invalid/old)
+    const prunedTasks: Record<string, Task> = {};
+    for (const id in this.tasks) {
+      const task = this.tasks[id];
+      // Only keep tasks less than 300 ticks old and with valid targets
+      const target = Game.getObjectById(task.targetId);
+      if (Game.time - task.createdAt < 300 && target) {
+        prunedTasks[id] = task;
+      }
+    }
+    Memory.tasks = prunedTasks as any;
   }
   
   /**
@@ -96,8 +105,6 @@ export class TaskManager {
       createdAt: Game.time,
       ...data
     };
-    
-    Logger.debug(`Created task ${id} of type ${type} with priority ${priority}`);
     
     return id;
   }
@@ -168,8 +175,8 @@ export class TaskManager {
   
   /**
    * Find the best task for a creep
+   * AI modules for builders, haulers, repairers, etc. should call this to get a task
    */
-  @Profiler.wrap('TaskManager.findTaskForCreep')
   public static findTaskForCreep(creep: Creep): Task | null {
     const room = creep.room;
     
@@ -243,39 +250,40 @@ export class TaskManager {
   }
   
   /**
-   * Execute a task for a creep
+   * Execute a task and track analytics
    */
-  @Profiler.wrap('TaskManager.executeTask')
   public static executeTask(creep: Creep, task: Task): TaskStatus {
-    // Get the target
-    const target = Game.getObjectById(task.targetId);
-    if (!target) {
-      // Target doesn't exist anymore, remove the task
-      this.removeTask(task.id);
-      return TaskStatus.Failed;
-    }
-    
-    // Execute based on task type
+    let status: TaskStatus = TaskStatus.Failed;
     switch (task.type) {
       case TaskType.Harvest:
-        return this.executeHarvestTask(creep, target as Source);
+        status = this.executeHarvestTask(creep, Game.getObjectById(task.targetId) as Source);
+        break;
       case TaskType.Upgrade:
-        return this.executeUpgradeTask(creep, target as StructureController);
+        status = this.executeUpgradeTask(creep, Game.getObjectById(task.targetId) as StructureController);
+        break;
       case TaskType.Build:
-        return this.executeBuildTask(creep, target as ConstructionSite);
+        status = this.executeBuildTask(creep, Game.getObjectById(task.targetId) as ConstructionSite);
+        break;
       case TaskType.Repair:
-        return this.executeRepairTask(creep, target as Structure);
+        status = this.executeRepairTask(creep, Game.getObjectById(task.targetId) as Structure);
+        break;
       case TaskType.Transfer:
-        return this.executeTransferTask(creep, target as Structure, task.resourceType || RESOURCE_ENERGY, task.amount);
+        status = this.executeTransferTask(creep, Game.getObjectById(task.targetId) as Structure, task.resourceType!, task.amount);
+        break;
       case TaskType.Withdraw:
-        return this.executeWithdrawTask(creep, target as Structure, task.resourceType || RESOURCE_ENERGY, task.amount);
+        status = this.executeWithdrawTask(creep, Game.getObjectById(task.targetId) as Structure, task.resourceType!, task.amount);
+        break;
       case TaskType.Pickup:
-        return this.executePickupTask(creep, target as Resource);
+        status = this.executePickupTask(creep, Game.getObjectById(task.targetId) as Resource);
+        break;
       // Add more task execution methods as needed
       default:
-        Logger.warn(`Unknown task type: ${task.type}`);
-        return TaskStatus.Failed;
+        status = TaskStatus.Failed;
     }
+    // Track analytics
+    if (status === TaskStatus.Completed) this.markCompleted();
+    else if (status === TaskStatus.Failed) this.markFailed();
+    return status;
   }
   
   /**
@@ -299,7 +307,6 @@ export class TaskManager {
     } else if (result === OK) {
       return TaskStatus.InProgress;
     } else {
-      Logger.warn(`Harvest task failed with error: ${result}`);
       return TaskStatus.Failed;
     }
   }
@@ -325,7 +332,6 @@ export class TaskManager {
     } else if (result === OK) {
       return TaskStatus.InProgress;
     } else {
-      Logger.warn(`Upgrade task failed with error: ${result}`);
       return TaskStatus.Failed;
     }
   }
@@ -351,7 +357,6 @@ export class TaskManager {
     } else if (result === OK) {
       return TaskStatus.InProgress;
     } else {
-      Logger.warn(`Build task failed with error: ${result}`);
       return TaskStatus.Failed;
     }
   }
@@ -382,7 +387,6 @@ export class TaskManager {
     } else if (result === OK) {
       return TaskStatus.InProgress;
     } else {
-      Logger.warn(`Repair task failed with error: ${result}`);
       return TaskStatus.Failed;
     }
   }
@@ -417,7 +421,6 @@ export class TaskManager {
     } else if (result === OK || result === ERR_FULL) {
       return TaskStatus.Completed;
     } else {
-      Logger.warn(`Transfer task failed with error: ${result}`);
       return TaskStatus.Failed;
     }
   }
@@ -452,7 +455,6 @@ export class TaskManager {
     } else if (result === OK || result === ERR_NOT_ENOUGH_RESOURCES) {
       return TaskStatus.Completed;
     } else {
-      Logger.warn(`Withdraw task failed with error: ${result}`);
       return TaskStatus.Failed;
     }
   }
@@ -478,7 +480,6 @@ export class TaskManager {
     } else if (result === OK) {
       return TaskStatus.Completed;
     } else {
-      Logger.warn(`Pickup task failed with error: ${result}`);
       return TaskStatus.Failed;
     }
   }
@@ -486,24 +487,20 @@ export class TaskManager {
   /**
    * Clean up completed or invalid tasks
    */
-  @Profiler.wrap('TaskManager.cleanup')
   public static cleanup(): void {
     for (const taskId in this.tasks) {
       const task = this.tasks[taskId];
-      
       // Remove old tasks
-      if (Game.time - task.createdAt > 1000) {
+      if (Game.time - task.createdAt > 300) {
         this.removeTask(taskId);
         continue;
       }
-      
       // Check if target still exists
       const target = Game.getObjectById(task.targetId);
       if (!target) {
         this.removeTask(taskId);
         continue;
       }
-      
       // Check for completed tasks
       if (task.type === TaskType.Build) {
         const site = target as ConstructionSite;
@@ -518,11 +515,91 @@ export class TaskManager {
           continue;
         }
       }
-      
+      // Remove tasks with no assigned creeps and not a valid opportunity (e.g., transfer/withdraw/pickup with no resource/energy left)
+      if (task.assignedCreeps.length === 0) {
+        // For transfer/withdraw/pickup, check if still needed
+        if (task.type === TaskType.Transfer || task.type === TaskType.Withdraw || task.type === TaskType.Pickup) {
+          // If target is full/empty, remove
+          if (task.type === TaskType.Transfer && (target as any).store && (target as any).store.getFreeCapacity && (target as any).store.getFreeCapacity(task.resourceType) === 0) {
+            this.removeTask(taskId);
+            continue;
+          }
+          if (task.type === TaskType.Withdraw && (target as any).store && (target as any).store.getUsedCapacity && (target as any).store.getUsedCapacity(task.resourceType) === 0) {
+            this.removeTask(taskId);
+            continue;
+          }
+          if (task.type === TaskType.Pickup && (target as any).amount === 0) {
+            this.removeTask(taskId);
+            continue;
+          }
+        } else {
+          // For other types, remove if no assigned creeps
+          this.removeTask(taskId);
+          continue;
+        }
+      }
       // Clean up assigned creeps that no longer exist
       task.assignedCreeps = task.assignedCreeps.filter(
         (name) => Game.creeps[name]
       );
+    }
+    // Log task stats every 100 ticks
+    if (Game.time % 100 === 0) {
+      const total = Object.keys(this.tasks).length;
+      const byType: Record<string, number> = {};
+      for (const id in this.tasks) {
+        const t = this.tasks[id];
+        byType[t.type] = (byType[t.type] || 0) + 1;
+      }
+      console.log(`[TaskManager] Total tasks: ${total} | ` + Object.entries(byType).map(([type, count]) => `${type}: ${count}`).join(', '));
+    }
+  }
+  
+  /**
+   * Mark a task as completed (analytics)
+   */
+  public static markCompleted(): void {
+    this.taskStats.completed++;
+  }
+  
+  /**
+   * Mark a task as failed (analytics)
+   */
+  public static markFailed(): void {
+    this.taskStats.failed++;
+  }
+  
+  /**
+   * Mark a creep as idle (analytics)
+   */
+  public static markIdle(): void {
+    this.taskStats.idle++;
+  }
+  
+  /**
+   * Get analytics stats
+   */
+  public static getStats(): { completed: number; failed: number; idle: number } {
+    return { ...this.taskStats };
+  }
+  
+  /**
+   * Log task analytics for easier tuning
+   */
+  public static logAnalytics(): void {
+    if (Game.time % 100 !== 0) return;
+    // Global stats
+    const stats = this.getStats();
+    // Per-room stats (optional, if tasks are tracked by room)
+    const roomStats: Record<string, { created: number; assigned: number }> = {};
+    for (const taskId in this.tasks) {
+      const task = this.tasks[taskId];
+      if (!roomStats[task.roomName]) roomStats[task.roomName] = { created: 0, assigned: 0 };
+      roomStats[task.roomName].created++;
+      roomStats[task.roomName].assigned += task.assignedCreeps.length;
+    }
+    for (const roomName in roomStats) {
+      // Do NOT write analytics to Memory (keep in global only)
     }
   }
 }

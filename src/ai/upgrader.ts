@@ -4,7 +4,6 @@
  */
 
 import { Logger } from '../utils/logger';
-import { Profiler } from '../utils/profiler';
 
 declare global {
   interface Room {
@@ -18,7 +17,6 @@ export class UpgraderAI {
   /**
    * Main task method for upgrader creeps
    */
-  @Profiler.wrap('UpgraderAI.task')
   public static task(creep: Creep): void {
     // Batch actions: only run every 3 ticks, staggered by creep name
     if (Game.time % 3 !== (parseInt(creep.name.replace(/\D/g, ''), 10) % 3)) return;
@@ -45,7 +43,6 @@ export class UpgraderAI {
     }
     
     if (creep.memory.working) {
-      Profiler.start('UpgraderAI.upgrade');
       // Working state - upgrade controller
       if (creep.room.controller && creep.room.controller.my) {
         if (creep.upgradeController(creep.room.controller) === ERR_NOT_IN_RANGE) {
@@ -57,11 +54,9 @@ export class UpgraderAI {
         // No controller to upgrade in this room
         creep.say('❓ no ctrl');
       }
-      Profiler.end('UpgraderAI.upgrade');
     } 
     // Harvesting state - collect energy
     else {
-      Profiler.start('UpgraderAI.harvest');
       const controller = creep.room.controller;
       // Try to find dropped energy first (closest by path to creep)
       let target = null;
@@ -116,7 +111,6 @@ export class UpgraderAI {
         // No source found
         creep.say('❓ no src');
       }
-      Profiler.end('UpgraderAI.harvest');
     }
   }
 }

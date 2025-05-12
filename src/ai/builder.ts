@@ -1,12 +1,13 @@
 /**
  * Builder AI
  * Handles construction and repair tasks
+ * Now task-driven: will use TaskManager for all build/repair tasks, falling back to legacy state machine if no task is available.
  */
 
 import { Logger } from '../utils/logger';
-import { Profiler } from '../utils/profiler';
 import * as _ from 'lodash';
 import { getDynamicReusePath } from '../utils/helpers';
+import { TaskManager } from '../managers/task-manager';
 
 enum BuilderState {
   Harvesting = 'harvesting',
@@ -19,8 +20,16 @@ export class BuilderAI {
   /**
    * Main task method for builder creeps
    */
-  @Profiler.wrap('BuilderAI.task')
   public static task(creep: Creep): void {
+    // --- TaskManager integration ---
+    const task = TaskManager.findTaskForCreep(creep);
+    if (task) {
+      TaskManager.executeTask(creep, task);
+      return;
+    } else {
+      TaskManager.markIdle();
+    }
+    // --- Fallback to legacy state machine if no task found ---
     // Get or initialize creep memory
     const memory = creep.memory;
     
@@ -72,24 +81,16 @@ export class BuilderAI {
     // State machine for builder behavior
     switch (memory.activity as BuilderState) {
       case BuilderState.Harvesting:
-        Profiler.start('BuilderAI.harvesting');
         this.doHarvesting(creep);
-        Profiler.end('BuilderAI.harvesting');
         break;
       case BuilderState.Building:
-        Profiler.start('BuilderAI.building');
-        this.doBuilding(creep);
-        Profiler.end('BuilderAI.building');
+        this.doBuildingWithPriority(creep);
         break;
       case BuilderState.Repairing:
-        Profiler.start('BuilderAI.repairing');
         this.doRepairing(creep);
-        Profiler.end('BuilderAI.repairing');
         break;
       case BuilderState.Upgrading:
-        Profiler.start('BuilderAI.upgrading');
         this.doUpgrading(creep);
-        Profiler.end('BuilderAI.upgrading');
         break;
       default:
         // Reset to harvesting
@@ -214,38 +215,122 @@ export class BuilderAI {
   }
   
   /**
-   * Handle building state
+   * Build with advanced priority: considers structure type, roads on swamp, heatmap, proximity, and progress
    */
-  private static doBuilding(creep: Creep): void {
-    const memory = creep.memory;
-    
-    // Switch back to harvesting if empty
-    if (creep.store.getUsedCapacity() === 0) {
-      memory.activity = BuilderState.Harvesting;
-      creep.say('🔄 Harvest');
+  private static doBuildingWithPriority(creep: Creep): void {
+    const sites = creep.room.find(FIND_MY_CONSTRUCTION_SITES);
+    if (sites.length === 0) {
+      // No sites, switch to upgrading
+      creep.memory.activity = BuilderState.Upgrading;
+      creep.say('⚡ Upgrade');
       return;
     }
-    
-    // Find construction sites
-    const constructionSites = creep.room.find(FIND_MY_CONSTRUCTION_SITES);
-    
-    if (constructionSites.length > 0) {
-      // Sort by progress percentage
-      const target = _.sortBy(constructionSites, site => 
-        site.progress / site.progressTotal
-      )[0];
-      
-      if (creep.build(target) === ERR_NOT_IN_RANGE) {
-        creep.moveTo(target, {
-          visualizePathStyle: { stroke: '#ffffff' },
-          reusePath: getDynamicReusePath(creep, target)
-        });
-      }
-    } else {
-      // No construction sites, switch to repairing
-      memory.activity = BuilderState.Repairing;
-      creep.say('🔧 Repair');
+    // Sort sites by advanced priority
+    sites.sort((a, b) => this.getSitePriority(a, creep) - this.getSitePriority(b, creep));
+    const target = sites[0];
+    if (creep.build(target) === ERR_NOT_IN_RANGE) {
+      creep.moveTo(target, { visualizePathStyle: { stroke: '#ffffff' }, reusePath: 10 });
     }
+  }
+  
+  /**
+   * Assign a numeric priority to a construction site. Lower is better.
+   * Considers structure type, roads on swamp, road heatmap, proximity, ramparts/walls under threat, resource accessibility, progress, site age, RCL, energy, and expansion context.
+   */
+  private static getSitePriority(site: ConstructionSite, creep: Creep): number {
+    // 1. Structure type base priority
+    const typePriority: Partial<Record<StructureConstant, number>> = {
+      [STRUCTURE_SPAWN]: 1,
+      [STRUCTURE_EXTENSION]: 2,
+      [STRUCTURE_TOWER]: 3,
+      [STRUCTURE_STORAGE]: 4,
+      [STRUCTURE_LINK]: 5,
+      [STRUCTURE_TERMINAL]: 6,
+      [STRUCTURE_LAB]: 7,
+      [STRUCTURE_FACTORY]: 8,
+      [STRUCTURE_CONTAINER]: 9,
+      [STRUCTURE_RAMPART]: 10,
+      [STRUCTURE_WALL]: 11,
+      [STRUCTURE_ROAD]: 20
+    };
+    let priority = typePriority[site.structureType] ?? 50;
+
+    // 2. Roads on swamp get a boost
+    if (site.structureType === STRUCTURE_ROAD) {
+      const terrain = creep.room.getTerrain().get(site.pos.x, site.pos.y);
+      if (terrain === TERRAIN_MASK_SWAMP) priority -= 5;
+      // 3. Road heatmap: higher heat = higher priority
+      const heat = (creep.room.memory.roadHeatmap?.[site.pos.x]?.[site.pos.y]) || 0;
+      priority -= Math.min(heat, 10);
+      // 4. Critical pathway: (not implemented, but could be added)
+    }
+
+    // 5. Ramparts/walls under threat
+    if ((site.structureType === STRUCTURE_RAMPART || site.structureType === STRUCTURE_WALL)) {
+      // If near hostile or low hits, boost
+      const hostiles = creep.room.find(FIND_HOSTILE_CREEPS);
+      if (hostiles.some(h => h.pos.getRangeTo(site.pos) <= 3)) priority -= 10;
+      // If adjacent to spawn/storage/tower, boost
+      const important = [
+        ...creep.room.find(FIND_MY_SPAWNS),
+        ...(creep.room.storage ? [creep.room.storage] : []),
+        ...creep.room.find(FIND_MY_STRUCTURES, { filter: s => s.structureType === STRUCTURE_TOWER })
+      ];
+      if (important.some(s => s.pos.getRangeTo(site.pos) <= 1)) priority -= 5;
+    }
+
+    // 6. Proximity to spawn/storage/controller for critical structures
+    const proximityTypes: StructureConstant[] = [
+      STRUCTURE_SPAWN, STRUCTURE_EXTENSION, STRUCTURE_TOWER, STRUCTURE_STORAGE, STRUCTURE_LINK
+    ];
+    if (proximityTypes.includes(site.structureType as StructureConstant)) {
+      let minDist = 50;
+      const spawns = creep.room.find(FIND_MY_SPAWNS);
+      if (spawns.length > 0) minDist = Math.min(minDist, ...spawns.map(s => s.pos.getRangeTo(site.pos)));
+      if (creep.room.storage) minDist = Math.min(minDist, creep.room.storage.pos.getRangeTo(site.pos));
+      if (creep.room.controller) minDist = Math.min(minDist, creep.room.controller.pos.getRangeTo(site.pos));
+      priority += Math.floor(minDist / 5);
+    }
+
+    // 7. Resource accessibility: containers near sources/controller
+    if (site.structureType === STRUCTURE_CONTAINER) {
+      const sources = creep.room.find(FIND_SOURCES);
+      if (sources.some(s => s.pos.getRangeTo(site.pos) <= 2)) priority -= 3;
+      if (creep.room.controller && creep.room.controller.pos.getRangeTo(site.pos) <= 2) priority -= 2;
+    }
+
+    // 8. Progress: sites closer to completion get a small boost
+    if (site.progressTotal > 0) {
+      const progressRatio = site.progress / site.progressTotal;
+      priority -= Math.floor(progressRatio * 3);
+    }
+
+    // 9. Construction site age (older = higher priority)
+    if ((site as any).creationTime) {
+      const age = Game.time - (site as any).creationTime;
+      priority -= Math.min(Math.floor(age / 100), 5);
+    }
+
+    // 10. Room RCL requirements (deprioritize if not allowed yet)
+    if (creep.room.controller && site.structureType in CONTROLLER_STRUCTURES) {
+      const allowed = CONTROLLER_STRUCTURES[site.structureType as StructureConstant][creep.room.controller.level] || 0;
+      const existing = creep.room.find(FIND_STRUCTURES, { filter: s => s.structureType === site.structureType }).length;
+      if (existing >= allowed) priority += 20;
+    }
+
+    // 11. Energy availability (if low, deprioritize non-critical)
+    const criticalTypes: StructureConstant[] = [STRUCTURE_SPAWN, STRUCTURE_EXTENSION, STRUCTURE_TOWER];
+    if (creep.room.energyAvailable < 300 && !criticalTypes.includes(site.structureType as StructureConstant)) {
+      priority += 10;
+    }
+
+    // 12. Expansion/remote room: prioritize infrastructure
+    if (creep.room.controller && !creep.room.controller.my) {
+      const infraTypes: StructureConstant[] = [STRUCTURE_CONTAINER, STRUCTURE_ROAD];
+      if (infraTypes.includes(site.structureType as StructureConstant)) priority -= 5;
+    }
+
+    return priority;
   }
   
   /**

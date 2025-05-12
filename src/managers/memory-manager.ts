@@ -4,8 +4,9 @@
  */
 
 import { Logger } from '../utils/logger';
-import { Profiler } from '../utils/profiler';
 import * as _ from 'lodash';
+import { RoomCache } from '../utils/room-cache';
+import { CONFIG } from '../config';
 
 export class MemoryManager {
   /**
@@ -20,18 +21,59 @@ export class MemoryManager {
   /**
    * Clean up unused memory entries
    */
-  @Profiler.wrap('MemoryManager.cleanup')
   public static cleanup(): void {
     // Clean up creep memory
     for (const name in Memory.creeps) {
       if (!Game.creeps[name]) {
         delete Memory.creeps[name];
-        Logger.debug(`Cleared memory for non-existing creep: ${name}`);
       }
     }
-    
-    // Other cleanup as needed
-    // TODO: Implement room memory cleanup for unused rooms
+    // Clean up room memory for rooms we no longer own or see
+    for (const roomName in Memory.rooms) {
+      if (!Game.rooms[roomName] || !Game.rooms[roomName].controller || !Game.rooms[roomName].controller.my) {
+        delete Memory.rooms[roomName];
+      }
+    }
+    // Analytics and stats are now kept only in global, not in Memory, for CPU/memory efficiency
+    // (Removed all Memory.analytics and Memory.stats cleanup)
+    // Clean up containers memory for non-existing containers
+    if (Memory.containers) {
+      for (const id in Memory.containers) {
+        if (!Game.getObjectById(id as Id<StructureContainer>)) {
+          delete Memory.containers[id];
+        }
+      }
+    }
+    // Clean up links memory for non-existing links
+    if (Memory.links) {
+      for (const id in Memory.links) {
+        if (!Game.getObjectById(id as Id<StructureLink>)) {
+          delete Memory.links[id];
+        }
+      }
+    }
+    // Clean up roomData for rooms not seen in a long time
+    if (Memory.roomData) {
+      for (const roomName in Memory.roomData) {
+        if (!Game.rooms[roomName] && (!Memory.roomData[roomName].lastSeen || Game.time - Memory.roomData[roomName].lastSeen > 20000)) {
+          delete Memory.roomData[roomName];
+        }
+      }
+    }
+    // Clean up colony expansionTargets for rooms that no longer exist
+    if (Memory.colony && Memory.colony.expansionTargets) {
+      Memory.colony.expansionTargets = Memory.colony.expansionTargets.filter((roomName: string) => Game.map.getRoomStatus(roomName).status === 'normal');
+    }
+    // Prune scouted rooms by age (not seen in last 10,000 ticks)
+    const SCOUTED_ROOM_MAX_AGE = 10000;
+    if (Memory.colony && Memory.colony.rooms && Memory.colony.rooms.scouted && typeof Memory.colony.rooms.scouted === 'object') {
+      for (const roomName in Memory.colony.rooms.scouted) {
+        const data = Memory.colony.rooms.scouted[roomName];
+        if (!data.lastSeen || Game.time - data.lastSeen > SCOUTED_ROOM_MAX_AGE) {
+          delete Memory.colony.rooms.scouted[roomName];
+        }
+      }
+    }
   }
   
   /**
@@ -58,15 +100,12 @@ export class MemoryManager {
           // Specific archer initialization
           break;
       }
-      
-      Logger.debug(`Initialized memory for creep ${creep.name} as ${role}`);
     }
   }
   
   /**
    * Update memory for a room
    */
-  @Profiler.wrap('MemoryManager.updateRoomMemory')
   public static updateRoomMemory(room: Room): void {
     const memory = room.memory;
     
@@ -86,7 +125,7 @@ export class MemoryManager {
     // Even ticks - Update creep counts
     if (!(memory.ticks & 1)) {
       try {
-        const myCreeps = room.find(FIND_MY_CREEPS);
+        const myCreeps = RoomCache.get(room, FIND_MY_CREEPS);
         
         // Count creeps by role
         memory.harvesters = _.filter(myCreeps, (c) => 
@@ -98,28 +137,26 @@ export class MemoryManager {
         ).length;
         
         // Find hostiles
-        memory.hostiles = room.find(FIND_HOSTILE_CREEPS, {
+        memory.hostilesCount = RoomCache.get(room, FIND_HOSTILE_CREEPS, {
           filter: (c) => c.owner.username !== 'Invader'
-        });
-        
-        memory.hostilesCount = memory.hostiles.length;
+        }).length;
       } catch (e) {
-        Logger.error(`Error updating creep counts: ${(e as Error).message}`, room.name);
+        // No logging in this method
       }
     }
     
     // Odd ticks - Update structure counts
     if (memory.ticks & 1) {
       try {
-        const myStructures = room.find(FIND_MY_STRUCTURES);
-        const mySpawns = room.find(FIND_MY_SPAWNS);
-        const myConstructionSites = room.find(FIND_MY_CONSTRUCTION_SITES);
+        const myStructures = RoomCache.get(room, FIND_MY_STRUCTURES);
+        const mySpawns = RoomCache.get(room, FIND_MY_SPAWNS);
+        const myConstructionSites = RoomCache.get(room, FIND_MY_CONSTRUCTION_SITES);
         
         memory.structures = myStructures.length;
         memory.spawns = mySpawns.length;
         memory.constructions = myConstructionSites.length;
       } catch (e) {
-        Logger.error(`Error updating structure counts: ${(e as Error).message}`, room.name);
+        // No logging in this method
       }
     }
   }
@@ -128,7 +165,7 @@ export class MemoryManager {
    * Initialize memory for a room
    */
   public static initRoomMemory(room: Room): void {
-    Logger.info(`Initializing memory for room ${room.name}`);
+    // No logging in this method
     
     const memory = room.memory;
     
@@ -160,7 +197,7 @@ export class MemoryManager {
     
     try {
       // Find and record all sources
-      const sources = room.find(FIND_SOURCES);
+      const sources = RoomCache.get(room, FIND_SOURCES);
       for (const source of sources) {
         if (source && source.id) {
           memory.sources[source.id] = {
@@ -174,7 +211,34 @@ export class MemoryManager {
         }
       }
     } catch (e) {
-      Logger.error(`Error initializing sources: ${(e as Error).message}`, room.name);
+      // No logging in this method
     }
   }
+
+  /**
+   * Update the scouted rooms record for a room
+   */
+  public static markRoomScouted(roomName: string): void {
+    if (!Memory.colony || !Memory.colony.rooms) return;
+    if (!Memory.colony.rooms.scouted || Array.isArray(Memory.colony.rooms.scouted)) Memory.colony.rooms.scouted = {};
+    Memory.colony.rooms.scouted[roomName] = { lastSeen: Game.time };
+  }
+
+  /**
+   * Update memory for all existing creeps every tick (versioning and role-based init)
+   */
+  public static updateAllCreepMemory(): void {
+    for (const name in Game.creeps) {
+      const creep = Game.creeps[name];
+      // If version is missing or outdated, or role is missing, re-init
+      if (!creep.memory.version || creep.memory.version < global.config.version || !creep.memory.role) {
+        this.initCreepMemory(creep, creep.memory.role || 'harvester');
+      }
+    }
+  }
+}
+
+if (Memory.tasks && Memory.buildId !== CONFIG.BUILD_ID) {
+  delete Memory.tasks;
+  console.log('[DEPLOY] Cleared old Memory.tasks for new build.');
 }

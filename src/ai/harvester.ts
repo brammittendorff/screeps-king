@@ -4,8 +4,8 @@
  */
 
 import { Logger } from '../utils/logger';
-import { Profiler } from '../utils/profiler';
 import * as _ from 'lodash';
+import { RoomCache } from '../utils/room-cache';
 
 declare global {
   interface Room {
@@ -25,21 +25,17 @@ export class HarvesterAI {
   /**
    * Main task method for harvester creeps
    */
-  @Profiler.wrap('HarvesterAI.task')
   public static task(creep: Creep): void {
     // Batch actions: only run every 3 ticks, staggered by creep name
     if (Game.time % 3 !== (parseInt(creep.name.replace(/\D/g, ''), 10) % 3)) return;
     // Get or initialize creep memory
     const memory = creep.memory;
-    // Per-tick cache for sources and structures
-    if (!creep.room._sourcesTick || creep.room._sourcesTick !== Game.time) {
-      creep.room._sources = creep.room.find(FIND_SOURCES);
-      creep.room._structures = creep.room.find(FIND_MY_STRUCTURES);
-      creep.room._sourcesTick = Game.time;
-    }
-    
+    // Use RoomCache for sources and structures
+    const sources = RoomCache.get(creep.room, FIND_SOURCES);
+    const structures = RoomCache.get(creep.room, FIND_MY_STRUCTURES);
     // Always define mineral for all states
-    const mineral = creep.room.find(FIND_MINERALS)[0];
+    const minerals = RoomCache.get(creep.room, FIND_MINERALS);
+    const mineral = minerals[0];
     
     // Initialize if needed
     if (!memory.initiated) {
@@ -51,18 +47,18 @@ export class HarvesterAI {
           memory.targetSourceId = global.go.resource.selectClosestTo(creep);
         } else {
           // Fallback - find source directly
-          const sources = creep.room.find(FIND_SOURCES);
-          if (sources.length > 0) {
-            const source = creep.pos.findClosestByRange(sources);
+          const localSources = RoomCache.get(creep.room, FIND_SOURCES);
+          if (localSources.length > 0) {
+            const source = creep.pos.findClosestByRange(localSources);
             memory.targetSourceId = source ? source.id : null;
           }
         }
       } catch (e) {
         console.log(`Error finding source for ${creep.name}: ${e}`);
         // Find any source as a fallback
-        const sources = creep.room.find(FIND_SOURCES);
-        if (sources.length > 0) {
-          memory.targetSourceId = sources[0].id;
+        const localSources = RoomCache.get(creep.room, FIND_SOURCES);
+        if (localSources.length > 0) {
+          memory.targetSourceId = localSources[0].id;
         }
       }
 
@@ -73,19 +69,13 @@ export class HarvesterAI {
     // State machine for harvester behavior
     switch (memory.activity as HarvesterState) {
       case HarvesterState.Harvesting:
-        Profiler.start('HarvesterAI.harvesting');
         this.doHarvesting(creep);
-        Profiler.end('HarvesterAI.harvesting');
         break;
       case HarvesterState.Unloading:
-        Profiler.start('HarvesterAI.unloading');
         this.doUnloading(creep);
-        Profiler.end('HarvesterAI.unloading');
         break;
       case HarvesterState.Building:
-        Profiler.start('HarvesterAI.building');
         this.doBuilding(creep);
-        Profiler.end('HarvesterAI.building');
         break;
       default:
         memory.activity = HarvesterState.Harvesting;
@@ -111,18 +101,18 @@ export class HarvesterAI {
     
     // Get target source
     let targetSource = Game.getObjectById(memory.targetSourceId as Id<Source>);
-    // If not in memory, use per-tick cache
-    if (!targetSource && creep.room._sources && creep.room._sources.length > 0) {
-      targetSource = creep.pos.findClosestByRange(creep.room._sources);
+    const localSources = RoomCache.get(creep.room, FIND_SOURCES);
+    if (!targetSource && localSources.length > 0) {
+      targetSource = creep.pos.findClosestByRange(localSources);
       memory.targetSourceId = targetSource ? targetSource.id : null;
     }
     
     // Check if source exists
     if (!targetSource) {
       Logger.debug(`${creep.name}: Invalid source, getting new source`);
-      // Use per-tick cache for sources
-      if (creep.room._sources && creep.room._sources.length > 0) {
-        const source = creep.pos.findClosestByRange(creep.room._sources);
+      const fallbackSources = RoomCache.get(creep.room, FIND_SOURCES);
+      if (fallbackSources.length > 0) {
+        const source = creep.pos.findClosestByRange(fallbackSources);
         memory.targetSourceId = source ? source.id : null;
       }
       // If still no valid source, move randomly
@@ -153,9 +143,7 @@ export class HarvesterAI {
     // If carrying energy, deliver to highest priority target
     if (creep.store[RESOURCE_ENERGY] > 0) {
       // 1. Extensions and spawn
-      let targets = creep.room.find(FIND_MY_STRUCTURES, {
-        filter: (s) => (s.structureType === STRUCTURE_EXTENSION || s.structureType === STRUCTURE_SPAWN) && (s as any).energy < (s as any).energyCapacity
-      });
+      let targets = RoomCache.get(creep.room, FIND_MY_STRUCTURES).filter((s) => (s.structureType === STRUCTURE_EXTENSION || s.structureType === STRUCTURE_SPAWN) && (s as any).energy < (s as any).energyCapacity);
       if (targets.length > 0) {
         if (creep.transfer(targets[0], RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
           creep.moveTo(targets[0], { reusePath: 10 });
@@ -163,9 +151,7 @@ export class HarvesterAI {
         return;
       }
       // 2. Controller container (if exists)
-      const controllerContainer = creep.room.find(FIND_STRUCTURES, {
-        filter: (s) => s.structureType === STRUCTURE_CONTAINER && creep.room.controller && s.pos.getRangeTo(creep.room.controller) <= 3 && s.store.getFreeCapacity(RESOURCE_ENERGY) > 0
-      });
+      const controllerContainer = RoomCache.get(creep.room, FIND_MY_STRUCTURES).filter((s) => s.structureType === STRUCTURE_CONTAINER && creep.room.controller && s.pos.getRangeTo(creep.room.controller) <= 3 && s.store.getFreeCapacity(RESOURCE_ENERGY) > 0);
       if (controllerContainer.length > 0) {
         if (creep.transfer(controllerContainer[0], RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
           creep.moveTo(controllerContainer[0], { reusePath: 10 });
@@ -180,9 +166,7 @@ export class HarvesterAI {
         return;
       }
       // 4. Towers (if not full)
-      const towers = creep.room.find(FIND_MY_STRUCTURES, {
-        filter: (s) => s.structureType === STRUCTURE_TOWER && (s as StructureTower).energy < (s as StructureTower).energyCapacity
-      });
+      const towers = RoomCache.get(creep.room, FIND_MY_STRUCTURES).filter((s) => s.structureType === STRUCTURE_TOWER && (s as StructureTower).energy < (s as StructureTower).energyCapacity);
       if (towers.length > 0) {
         if (creep.transfer(towers[0], RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
           creep.moveTo(towers[0], { reusePath: 10 });
@@ -233,7 +217,7 @@ export class HarvesterAI {
     // Handle build mode
     if (memory.buildMode === 1) {
       // Find construction sites
-      const targets = creep.room.find(FIND_MY_CONSTRUCTION_SITES);
+      const targets = RoomCache.get(creep.room, FIND_MY_CONSTRUCTION_SITES);
       
       if (targets.length > 0) {
         if (creep.build(targets[0]) === ERR_NOT_IN_RANGE) {
@@ -259,9 +243,7 @@ export class HarvesterAI {
     // Handle repair mode
     else if (memory.buildMode === 2) {
       // Find damaged structures
-      const targets = creep.room.find(FIND_STRUCTURES, {
-        filter: (s) => s.hits < s.hitsMax && s.structureType !== STRUCTURE_WALL
-      });
+      const targets = RoomCache.get(creep.room, FIND_MY_STRUCTURES).filter((s) => s.hits < s.hitsMax && s.structureType !== STRUCTURE_WALL);
       
       if (targets.length > 0) {
         // Sort by damage percentage

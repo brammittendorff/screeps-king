@@ -1,11 +1,10 @@
 import { Logger } from '../utils/logger';
-import { Profiler } from '../utils/profiler';
+import { RoomCache } from '../utils/room-cache';
 
 export class ScoutAI {
   /**
    * Main task method for scout creeps
    */
-  @Profiler.wrap('ScoutAI.task')
   public static task(creep: Creep): void {
     // 1. If we have a targetRoom and not there, move there
     if (creep.memory.targetRoom && creep.room.name !== creep.memory.targetRoom) {
@@ -22,9 +21,9 @@ export class ScoutAI {
     if (creep.memory.targetRoom && creep.room.name === creep.memory.targetRoom) {
       const pointsOfInterest: RoomPosition[] = [];
       if (creep.room.controller) pointsOfInterest.push(creep.room.controller.pos);
-      const sources = creep.room.find(FIND_SOURCES);
+      const sources = RoomCache.get(creep.room, FIND_SOURCES);
       for (const source of sources) pointsOfInterest.push(source.pos);
-      const minerals = creep.room.find(FIND_MINERALS);
+      const minerals = RoomCache.get(creep.room, FIND_MINERALS);
       for (const mineral of minerals) pointsOfInterest.push(mineral.pos);
       if (pointsOfInterest.length === 0) {
         pointsOfInterest.push(
@@ -75,7 +74,7 @@ export class ScoutAI {
       }
     }
     // If nothing to do, idle at spawn or center
-    const spawn = creep.room.find(FIND_MY_SPAWNS)[0];
+    const spawn = RoomCache.get(creep.room, FIND_MY_SPAWNS)[0];
     if (spawn) {
       creep.moveTo(spawn, { range: 3, reusePath: 10 });
     } else {

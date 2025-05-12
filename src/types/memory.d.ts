@@ -13,6 +13,7 @@ interface CreepMemory {
   version?: number;
   path?: string;
   task?: TaskData;
+  phasingOut?: boolean;
 
   // Multi-room properties
   homeRoom?: string;        // The room this creep was spawned in or is assigned to
@@ -23,13 +24,12 @@ interface CreepMemory {
 
 interface RoomMemory {
   version?: number;
-  stage?: number;
+  stage?: number; // Room development stage
   template?: string;
   ticks?: number;
   harvesters?: number;
   upgraders?: number;
-  hostiles?: any[];
-  hostilesCount?: number;
+  hostilesCount?: number; // Hostile creep count (prefer this for efficiency)
   structures?: number;
   spawns?: number;
   constructions?: number;
@@ -43,6 +43,15 @@ interface RoomMemory {
       };
     };
   };
+  controllerId?: Id<StructureController>; // Controller ID for quick access
+  structureIds?: { [type: string]: Id<Structure>[] }; // Key structure IDs by type
+  constructionSites?: Id<ConstructionSite>[]; // Construction site IDs
+  threatLevel?: number; // Calculated threat level
+  resourceBalance?: { [resource: string]: number }; // Resource management
+  expansionScore?: number; // Expansion logic
+  minerals?: MineralConstant; // Mineral type in room
+  owner?: string; // Room owner username
+  reservation?: { username: string; ticksToEnd: number }; // Reservation info
   buildId?: string;
   lastBuildLog?: number;
   constructionQueue?: any[];
@@ -61,6 +70,19 @@ interface RoomMemory {
   lastControllerProgress?: number;
   progressHistory?: number[];
   idleTicks?: { [role: string]: number };
+  extensionFillStats?: { full: number; empty: number; ticks: number };
+}
+
+// For scouted rooms, use a dedicated type
+interface ScoutedRoomMemory {
+  lastSeen: number; // Last tick seen
+  sources?: number; // Number of sources
+  minerals?: MineralConstant; // Mineral type
+  owner?: string; // Owner username
+  reservation?: { username: string; ticksToEnd: number };
+  hostileStructures?: number; // Hostile structure count
+  expansionScore?: number; // Expansion score
+  threatLevel?: number; // Calculated threat level
 }
 
 interface Memory {
@@ -79,7 +101,7 @@ interface Memory {
     rooms: {
       owned: string[];
       reserved: string[];
-      scouted: string[];
+      scouted: Record<string, ScoutedRoomMemory>;
     };
     resourceBalance: { [resource: string]: { [roomName: string]: number } };
     expansionTargets: string[];

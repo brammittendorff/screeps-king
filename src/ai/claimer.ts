@@ -3,19 +3,15 @@
  * Used to claim new rooms for expansion
  */
 
-import { Logger } from '../utils/logger';
-import { Profiler } from '../utils/profiler';
 import { getDynamicReusePath } from '../utils/helpers';
 
 export class ClaimerAI {
   /**
    * Main task method for claimer creeps
    */
-  @Profiler.wrap('ClaimerAI.task')
   public static task(creep: Creep): void {
     // Ensure we have a target room
     if (!creep.memory.targetRoom) {
-      Logger.error(`Claimer ${creep.name} has no target room`);
       creep.say('❓ No target');
       return;
     }
@@ -30,7 +26,6 @@ export class ClaimerAI {
     if (creep.room.controller) {
       // Check if controller is already owned or reserved by someone else
       if (creep.room.controller.owner && !creep.room.controller.my) {
-        Logger.warn(`Room ${creep.room.name} is already owned by ${creep.room.controller.owner.username}`);
         creep.say('⚠️ Claimed');
         
         // Set a new target if possible
@@ -38,7 +33,6 @@ export class ClaimerAI {
           for (const roomName of Memory.colony.expansionTargets) {
             if (roomName !== creep.memory.targetRoom) {
               creep.memory.targetRoom = roomName;
-              Logger.info(`Redirecting claimer ${creep.name} to ${roomName}`);
               break;
             }
           }
@@ -77,7 +71,6 @@ export class ClaimerAI {
         creep.say(' To ctrl');
       } else if (result === OK) {
         // Successfully claimed!
-        Logger.info(`Successfully claimed room ${creep.room.name}!`, 'ClaimerAI');
         creep.say('🏳️ Claimed!');
         
         // Initialize colony memory for the new room
@@ -101,7 +94,6 @@ export class ClaimerAI {
       } else if (result === ERR_GCL_NOT_ENOUGH) {
         // GCL not high enough, reserve instead
         creep.say('⚠️ Low GCL');
-        Logger.warn(`Cannot claim ${creep.room.name} - GCL too low`, 'ClaimerAI');
         
         const reserveResult = creep.reserveController(creep.room.controller);
         if (reserveResult === ERR_NOT_IN_RANGE) {
@@ -124,14 +116,12 @@ export class ClaimerAI {
     // Find exit to target room
     const exitDir = Game.map.findExit(creep.room, targetRoom);
     if (exitDir === ERR_NO_PATH) {
-      Logger.error(`No path from ${creep.room.name} to ${targetRoom}`);
       creep.say('❌ No path');
       return;
     }
     
     const exit = creep.pos.findClosestByRange(exitDir as FindConstant);
     if (!exit) {
-      Logger.error(`Cannot find exit from ${creep.room.name} to ${targetRoom}`);
       creep.say('❌ No exit');
       return;
     }
@@ -232,7 +222,7 @@ export class ClaimerAI {
       const result = room.createConstructionSite(bestPos.x, bestPos.y, STRUCTURE_SPAWN);
       
       if (result === OK) {
-        Logger.info(`Created spawn construction site at ${bestPos.x},${bestPos.y} in ${room.name}`, 'ClaimerAI');
+        // Logger.info(`Created spawn construction site at ${bestPos.x},${bestPos.y} in ${room.name}`, 'ClaimerAI');
         
         // Also create a few extensions nearby
         const extensionPositions = [
