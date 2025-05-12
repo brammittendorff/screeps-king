@@ -119,25 +119,6 @@ export class UpgraderAI {
       Profiler.end('UpgraderAI.harvest');
     }
   }
-
-  private static runHauler(creep: Creep): void {
-    const targetRoom = creep.memory.targetRoom;
-    const homeRoom = creep.memory.homeRoom;
-
-    // Initialize working state if undefined
-    if (creep.memory.working === undefined) {
-      creep.memory.working = creep.store.getUsedCapacity() > 0;
-    }
-
-    // Fallback for missing targetRoom
-    if (!targetRoom) {
-      console.log(`[Hauler] ${creep.name} has no targetRoom set! Idling.`);
-      creep.say('❓ no tgt');
-      return;
-    }
-
-    // ... rest of your hauler logic ...
-  }
 }
 
 export function getDynamicReusePath(creep: Creep, target: RoomPosition | { pos: RoomPosition }): number {

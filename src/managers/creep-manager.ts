@@ -18,7 +18,7 @@ export enum CreepRole {
   Archer = 'archer',
   Reserver = 'reserver',
   RemoteHarvester = 'remoteHarvester',
-  Hauler = 'hauler',
+  Hauler = '',
   Scout = 'scout',
   Claimer = 'claimer',
   Destroyer = 'destroyer',
@@ -354,69 +354,13 @@ export class CreepManager {
     for (const creep of creeps) {
       try {
         // Get role from memory
-        const role = creep.memory.role || CreepRole.Harvester;
-
-        // Run appropriate role logic
-        switch (role) {
-          case CreepRole.Harvester:
-            if (global.ai.harvester && global.ai.harvester.task) {
-              global.ai.harvester.task(creep);
-            }
-            break;
-          case CreepRole.Upgrader:
-            if (global.ai.upgrader && global.ai.upgrader.task) {
-              global.ai.upgrader.task(creep);
-            }
-            break;
-          case CreepRole.Builder:
-            if (global.ai.builder && global.ai.builder.task) {
-              global.ai.builder.task(creep);
-            } else {
-              // Fallback to harvester AI if builder AI is not available
-              Logger.warn(`Builder AI not found for ${creep.name}, using harvester AI instead`);
-              global.ai.harvester.task(creep);
-            }
-            break;
-          case CreepRole.Archer:
-            if (global.ai.archer && global.ai.archer.task) {
-              global.ai.archer.task(creep);
-            }
-            break;
-          case CreepRole.RemoteHarvester:
-            // For now, use the harvester AI
-            if (global.ai.harvester && global.ai.harvester.task) {
-              global.ai.harvester.task(creep);
-            }
-            break;
-          case CreepRole.Reserver:
-            this.runReserver(creep);
-            break;
-          case CreepRole.Hauler:
-            this.runHauler(creep);
-            break;
-          case CreepRole.Scout:
-            this.runScout(creep);
-            break;
-          case CreepRole.Claimer:
-            if (global.ai.claimer && global.ai.claimer.task) {
-              global.ai.claimer.task(creep);
-            } else {
-              // If claimer AI not available, use reserver as fallback
-              Logger.warn(`Claimer AI not found for ${creep.name}, using reserver behavior instead`);
-              this.runReserver(creep);
-            }
-            break;
-          case CreepRole.Destroyer:
-            AI.destroyer.task(creep);
-            break;
-          case CreepRole.Defender:
-            AI.defender.task(creep);
-            break;
-          default:
-            // Run as harvester by default
-            if (global.ai.harvester && global.ai.harvester.task) {
-              global.ai.harvester.task(creep);
-            }
+        const role = creep.memory.role || 'harvester';
+        // Use modular AI system for all roles
+        if (role && AI[role] && typeof AI[role].task === 'function') {
+          AI[role].task(creep);
+        } else {
+          // Fallback to harvester if role is missing or not implemented
+          AI.harvester.task(creep);
         }
       } catch (e) {
         Logger.error(`Error running creep ${creep.name}: ${(e as Error).message}`);

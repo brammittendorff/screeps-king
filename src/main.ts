@@ -136,21 +136,13 @@ global.controller = {
   },
   creep: {
     routine: (creep: Creep) => {
-      // Run creep based on role
+      // Run creep based on role using modular AI
       const role = creep.memory.role;
-      switch (role) {
-        case 'harvester':
-          AI.harvester.task(creep);
-          break;
-        case 'upgrader':
-          AI.upgrader.task(creep);
-          break;
-        case 'builder':
-          AI.builder.task(creep);
-          break;
-        default:
-          AI.harvester.task(creep);
-          break;
+      if (role && AI[role] && typeof AI[role].task === 'function') {
+        AI[role].task(creep);
+      } else {
+        // Fallback to harvester if role is missing or not implemented
+        AI.harvester.task(creep);
       }
     }
   },

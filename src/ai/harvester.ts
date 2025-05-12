@@ -150,93 +150,56 @@ export class HarvesterAI {
    */
   private static doUnloading(creep: Creep): void {
     const memory = creep.memory;
-    
-    // If carrying energy, deliver to closest spawn/extension/storage
+    // If carrying energy, deliver to highest priority target
     if (creep.store[RESOURCE_ENERGY] > 0) {
-      let target: Structure | null = null;
-      if (creep.room.storage) {
-        target = creep.room.storage;
-      } else {
-        // Use per-tick cache for structures
-        if (creep.room._structures) {
-          target = creep.pos.findClosestByPath(creep.room._structures.filter((s: AnyStructure) =>
-            (s.structureType === STRUCTURE_SPAWN ||
-             s.structureType === STRUCTURE_EXTENSION) &&
-            s.store.getFreeCapacity(RESOURCE_ENERGY) > 0
-          ));
+      // 1. Extensions and spawn
+      let targets = creep.room.find(FIND_MY_STRUCTURES, {
+        filter: (s) => (s.structureType === STRUCTURE_EXTENSION || s.structureType === STRUCTURE_SPAWN) && (s as any).energy < (s as any).energyCapacity
+      });
+      if (targets.length > 0) {
+        if (creep.transfer(targets[0], RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+          creep.moveTo(targets[0], { reusePath: 10 });
         }
+        return;
       }
-      if (target) {
-        if (creep.transfer(target, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
-          creep.moveTo(target, { reusePath: 20 });
+      // 2. Controller container (if exists)
+      const controllerContainer = creep.room.find(FIND_STRUCTURES, {
+        filter: (s) => s.structureType === STRUCTURE_CONTAINER && creep.room.controller && s.pos.getRangeTo(creep.room.controller) <= 3 && s.store.getFreeCapacity(RESOURCE_ENERGY) > 0
+      });
+      if (controllerContainer.length > 0) {
+        if (creep.transfer(controllerContainer[0], RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+          creep.moveTo(controllerContainer[0], { reusePath: 10 });
         }
+        return;
+      }
+      // 3. Storage (if exists and not full)
+      if (creep.room.storage && creep.room.storage.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
+        if (creep.transfer(creep.room.storage, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+          creep.moveTo(creep.room.storage, { reusePath: 10 });
+        }
+        return;
+      }
+      // 4. Towers (if not full)
+      const towers = creep.room.find(FIND_MY_STRUCTURES, {
+        filter: (s) => s.structureType === STRUCTURE_TOWER && (s as StructureTower).energy < (s as StructureTower).energyCapacity
+      });
+      if (towers.length > 0) {
+        if (creep.transfer(towers[0], RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+          creep.moveTo(towers[0], { reusePath: 10 });
+        }
+        return;
       }
     }
-    
     // Switch back to harvesting if empty
     if (creep.store.getUsedCapacity() === 0) {
       memory.activity = HarvesterState.Harvesting;
       creep.say('🔄 Harvest');
       return;
     }
-    
-    // Find structures that need energy
-    const structuresPriority = [
-      STRUCTURE_EXTENSION,
-      STRUCTURE_SPAWN,
-      STRUCTURE_TOWER
-    ];
-    
-    let targets: Structure[] = [];
-    
-    // Check each structure type in priority order
-    for (const structureType of structuresPriority) {
-      const structures = creep.room.find(FIND_MY_STRUCTURES, {
-        filter: (s) => {
-          // Use helper function if available
-          if (global.helpers && global.helpers.getEnergy && global.helpers.getEnergyCapacity) {
-            return s.structureType === structureType && 
-                  global.helpers.getEnergy(s) < global.helpers.getEnergyCapacity(s);
-          }
-          
-          // Fallback for extensions, spawns, towers
-          if (structureType === STRUCTURE_EXTENSION || 
-              structureType === STRUCTURE_SPAWN || 
-              structureType === STRUCTURE_TOWER) {
-            const energyStructure = s as StructureExtension | StructureSpawn | StructureTower;
-            return s.structureType === structureType && 
-                  energyStructure.energy < energyStructure.energyCapacity;
-          }
-          
-          // Fallback for storage structures
-          if (structureType === STRUCTURE_STORAGE || 
-              structureType === STRUCTURE_CONTAINER) {
-            const storeStructure = s as StructureStorage | StructureContainer;
-            return s.structureType === structureType && 
-                  storeStructure.store.getFreeCapacity(RESOURCE_ENERGY) > 0;
-          }
-          
-          return false;
-        }
-      });
-      
-      targets = targets.concat(structures);
-    }
-    
-    // Transfer energy if targets found
-    if (targets.length > 0) {
-      if (creep.transfer(targets[0], RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
-        creep.moveTo(targets[0], {
-          visualizePathStyle: { stroke: '#ffffff' },
-          reusePath: 10
-        });
-      }
-    } else {
-      // No energy need, switch to building
-      memory.activity = HarvesterState.Building;
-      memory.buildMode = undefined;
-      creep.say('🚧 Build');
-    }
+    // If nothing to do, fallback to building/repairing/upgrading
+    memory.activity = HarvesterState.Building;
+    memory.buildMode = undefined;
+    creep.say('🚧 Build');
   }
   
   /**
