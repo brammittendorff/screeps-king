@@ -34,11 +34,10 @@ export const CONFIG = {
     ADVANCED_ENERGY_CAPACITY: 1300,
     
     DESIRED_BUILDERS: {
-      0: 0,  // RCL 0
-      1: 1,  // RCL 1
-      2: 2,  // RCL 2
-      3: 2,  // RCL 3
-      4: 2,  // RCL 4
+      1: 2,
+      2: 3,
+      3: 4,
+      4: 5,
       5: 1,  // RCL 5
       6: 1,  // RCL 6
       7: 1,  // RCL 7
@@ -46,11 +45,10 @@ export const CONFIG = {
     },
     
     DESIRED_UPGRADERS: {
-      0: 0,  // RCL 0
-      1: 1,  // RCL 1
-      2: 2,  // RCL 2
-      3: 3,  // RCL 3
-      4: 3,  // RCL 4
+      1: 5,
+      2: 5,
+      3: 6,
+      4: 8,
       5: 2,  // RCL 5
       6: 1,  // RCL 6
       7: 1,  // RCL 7
@@ -58,11 +56,10 @@ export const CONFIG = {
     },
     
     DESIRED_HARVESTERS: {
-      0: 0,  // RCL 0
-      1: 2,  // RCL 1
-      2: 2,  // RCL 2
-      3: 2,  // RCL 3
-      4: 2,  // RCL 4
+      1: 3, // RCL 1 = Initial
+      2: 4, // RCL 2 = Basic
+      3: 4, // RCL 3 = Intermediate
+      4: 2, // RCL 4 = Advanced
       5: 2,  // RCL 5
       6: 2,  // RCL 6
       7: 2,  // RCL 7

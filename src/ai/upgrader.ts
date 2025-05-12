@@ -39,17 +39,13 @@ export class UpgraderAI {
     } 
     // Harvesting state - collect energy
     else {
-      // Try to find dropped energy first
+      const controller = creep.room.controller;
+      // Try to find dropped energy first (closest by path to creep)
       let target = null;
-      
-      // Use helper for dropped energy if available
       if (global.helpers && global.helpers.findDroppedEnergy) {
         const droppedEnergy = global.helpers.findDroppedEnergy(creep.room);
-        
         if (droppedEnergy.length > 0) {
-          // Find closest dropped energy
           target = creep.pos.findClosestByPath(droppedEnergy);
-          
           if (target) {
             if (creep.pickup(target) === ERR_NOT_IN_RANGE) {
               creep.moveTo(target, {
@@ -60,35 +56,51 @@ export class UpgraderAI {
           }
         }
       }
-      
-      // Check for containers with energy
-      const containers = creep.room.find(FIND_STRUCTURES, {
-        filter: s => {
-          return (s.structureType === STRUCTURE_CONTAINER || 
-                 s.structureType === STRUCTURE_STORAGE) && 
-                 s.store.getUsedCapacity(RESOURCE_ENERGY) > 0;
-        }
-      });
-      
-      if (containers.length > 0) {
-        // Find closest container
-        const closestContainer = creep.pos.findClosestByPath(containers);
-        
-        if (closestContainer) {
-          if (creep.withdraw(closestContainer, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
-            creep.moveTo(closestContainer, {
+
+      // Prefer containers/storage closest to the controller
+      if (controller) {
+        const containers = creep.room.find(FIND_STRUCTURES, {
+          filter: s =>
+            (s.structureType === STRUCTURE_CONTAINER || s.structureType === STRUCTURE_STORAGE) &&
+            s.store.getUsedCapacity(RESOURCE_ENERGY) > 0
+        });
+        if (containers.length > 0) {
+          // Sort containers by distance to controller
+          containers.sort((a, b) =>
+            controller.pos.getRangeTo(a.pos) - controller.pos.getRangeTo(b.pos)
+          );
+          const bestContainer = containers[0];
+          if (creep.withdraw(bestContainer, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+            creep.moveTo(bestContainer, {
               visualizePathStyle: { stroke: '#ffaa00' }
             });
           }
           return;
         }
       }
-      
-      // Fall back to harvesting from source
-      const source = creep.pos.findClosestByPath(FIND_SOURCES);
-      if (source) {
-        if (creep.harvest(source) === ERR_NOT_IN_RANGE) {
-          creep.moveTo(source, {
+
+      // Prefer source closest to the controller
+      if (controller) {
+        const sources = creep.room.find(FIND_SOURCES);
+        if (sources.length > 0) {
+          sources.sort((a, b) =>
+            controller.pos.getRangeTo(a.pos) - controller.pos.getRangeTo(b.pos)
+          );
+          const bestSource = sources[0];
+          if (creep.harvest(bestSource) === ERR_NOT_IN_RANGE) {
+            creep.moveTo(bestSource, {
+              visualizePathStyle: { stroke: '#ffaa00' }
+            });
+          }
+          return;
+        }
+      }
+
+      // Fallback: closest-by-path to creep (old logic)
+      const fallbackSource = creep.pos.findClosestByPath(FIND_SOURCES);
+      if (fallbackSource) {
+        if (creep.harvest(fallbackSource) === ERR_NOT_IN_RANGE) {
+          creep.moveTo(fallbackSource, {
             visualizePathStyle: { stroke: '#ffaa00' }
           });
         }

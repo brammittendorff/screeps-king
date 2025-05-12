@@ -22,6 +22,9 @@ export class HarvesterAI {
     // Get or initialize creep memory
     const memory = creep.memory;
     
+    // Always define mineral for all states
+    const mineral = creep.room.find(FIND_MINERALS)[0];
+    
     // Initialize if needed
     if (!memory.initiated) {
       memory.activity = HarvesterState.Harvesting;
@@ -54,9 +57,47 @@ export class HarvesterAI {
     // State machine for harvester behavior
     switch (memory.activity as HarvesterState) {
       case HarvesterState.Harvesting:
-        this.doHarvesting(creep);
+        // Advanced: Prefer energy, but if full or no energy available, mine minerals if possible
+        const extractor = creep.room.find(FIND_STRUCTURES, {
+          filter: s => s.structureType === STRUCTURE_EXTRACTOR
+        })[0];
+        // @ts-ignore
+        const mineralAvailable = extractor && mineral && mineral.amount > 0 && (!mineral.ticksToRegeneration || mineral.ticksToRegeneration === 0);
+        // If not full of energy, prefer energy sources
+        if (creep.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
+          this.doHarvesting(creep);
+        } else if (mineralAvailable && creep.store.getFreeCapacity(mineral.mineralType) > 0) {
+          // If full of energy but can carry minerals, mine minerals
+          if (creep.harvest(mineral) === ERR_NOT_IN_RANGE) {
+            creep.moveTo(mineral, { visualizePathStyle: { stroke: '#00ff00' } });
+          }
+        } else {
+          // If can't mine minerals, unload
+          memory.activity = HarvesterState.Unloading;
+          creep.say('🔄 Unload');
+        }
         break;
       case HarvesterState.Unloading:
+        // Advanced: If carrying minerals, deliver to storage/terminal
+        const mineralType = mineral ? mineral.mineralType : null;
+        if (mineralType && creep.store[mineralType] > 0) {
+          // Prefer storage, then terminal
+          const storage = creep.room.storage;
+          const terminal = creep.room.terminal;
+          let target = null;
+          if (storage && storage.store.getFreeCapacity(mineralType) > 0) {
+            target = storage;
+          } else if (terminal && terminal.store.getFreeCapacity(mineralType) > 0) {
+            target = terminal;
+          }
+          if (target) {
+            if (creep.transfer(target, mineralType) === ERR_NOT_IN_RANGE) {
+              creep.moveTo(target, { visualizePathStyle: { stroke: '#00ff00' } });
+            }
+            return;
+          }
+        }
+        // Otherwise, do normal unloading
         this.doUnloading(creep);
         break;
       case HarvesterState.Building:

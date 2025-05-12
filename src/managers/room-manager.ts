@@ -9,6 +9,7 @@ import { Helpers } from '../utils/helpers';
 import { MemoryManager } from './memory-manager';
 import { CreepManager, CreepRole } from './creep-manager';
 import * as _ from 'lodash';
+import { CONFIG } from '../config/constants';
 
 export enum RoomStage {
   Initial = 0,
@@ -476,6 +477,23 @@ export class RoomManager {
    * Run logic for a specific room
    */
   public static runRoomLogic(room: Room): void {
+    // --- DEBUG LOGGING ---
+    const controller = room.controller;
+    const spawns = room.find(FIND_MY_SPAWNS);
+    const extensions = room.find(FIND_MY_STRUCTURES, { filter: s => s.structureType === STRUCTURE_EXTENSION });
+    const extensionSites = room.find(FIND_MY_CONSTRUCTION_SITES, { filter: s => s.structureType === STRUCTURE_EXTENSION });
+    Logger.info(`[${room.name}] Controller: level=${controller?.level}, progress=${controller?.progress}/${controller?.progressTotal}, owned=${controller?.my}`);
+    Logger.info(`[${room.name}] Spawns: built=${spawns.length}`);
+    Logger.info(`[${room.name}] Extensions: built=${extensions.length}, constructionSites=${extensionSites.length}`);
+
+    // --- AUTODESTROY EXTENSIONS IF AT RCL 1 ---
+    if (controller && controller.level === 1 && extensions.length > 0) {
+      for (const ext of extensions) {
+        ext.destroy();
+        Logger.warn(`[${room.name}] Destroyed extension at (${ext.pos.x},${ext.pos.y}) because controller is RCL 1.`);
+      }
+    }
+
     // Make sure the room has a template
     if (!room.memory.template) {
       room.memory.template = 'default';
@@ -557,7 +575,7 @@ export class RoomManager {
   }
   
   /**
-   * Request creeps based on room needs
+   * Request creeps based on room needs (expert, dynamic, config-driven)
    */
   private static requestCreeps(room: Room): void {
     // Get counts from memory (updated by MemoryManager)
@@ -568,42 +586,54 @@ export class RoomManager {
       c.memory.homeRoom === room.name
     ).length;
 
-    // Determine max counts based on stage
-    const stage = room.memory.stage as RoomStage;
-    let maxHarvesters = 0;
-    let maxUpgraders = 0;
-    let maxBuilders = 0;
+    // Get RCL (controller level), fallback to 1 if missing
+    const rcl = room.controller ? room.controller.level : 1;
+    // Get desired numbers from config, fallback to safe defaults
+    const maxHarvesters = CONFIG.ROOM.DESIRED_HARVESTERS[rcl] ?? 1;
+    const maxUpgraders = CONFIG.ROOM.DESIRED_UPGRADERS[rcl] ?? 1;
+    const maxBuilders = CONFIG.ROOM.DESIRED_BUILDERS[rcl] ?? 0;
 
-    switch (stage) {
-      case RoomStage.Initial:
-        maxHarvesters = 3; // 3 harvesters in stage 0
-        maxUpgraders = 5;  // 5 upgraders in stage 0
-        maxBuilders = 2;   // 2 builders in stage 0
-        break;
-      case RoomStage.Basic:
-        maxHarvesters = 4; // 4 harvesters in stage 1
-        maxUpgraders = 5;  // 5 upgraders in stage 1
-        maxBuilders = 3;   // 3 builders in stage 1
-        break;
-      case RoomStage.Intermediate:
-        maxHarvesters = 4; // 4 harvesters in stage 2
-        maxUpgraders = 6;  // 6 upgraders in stage 2
-        maxBuilders = 4;   // 4 builders in stage 2
-        break;
-      case RoomStage.Advanced:
-        maxHarvesters = 2; // 2 harvesters in stage 3 (rely more on containers)
-        maxUpgraders = 8;  // 8 upgraders in stage 3
-        maxBuilders = 5;   // 5 builders in stage 3
-        break;
-    }
-    
-    // Request harvesters if needed
-    if (harvesterCount < maxHarvesters) {
-      // Determine body based on available energy
+    // Emergency: If controller is at risk of downgrading, always spawn at least 1 upgrader
+    const controller = room.controller;
+    const controllerAtRisk = controller && controller.my && controller.ticksToDowngrade < 2000;
+    const needEmergencyUpgrader = controllerAtRisk && upgraderCount === 0;
+
+    // 1. Always prioritize at least 1 harvester if there are none
+    if (harvesterCount === 0) {
       const energy = room.energyCapacityAvailable;
       const body = CreepManager.getOptimalBody(CreepRole.Harvester, energy);
-      
-      // Request spawning
+      CreepManager.requestCreep({
+        role: CreepRole.Harvester,
+        body: body,
+        priority: 100, // Highest priority
+        roomName: room.name,
+        memory: {
+          role: CreepRole.Harvester
+        }
+      });
+      // Don't spawn anything else until we have a harvester
+      return;
+    }
+
+    // 2. Emergency upgrader if controller is at risk
+    if (needEmergencyUpgrader) {
+      const energy = room.energyCapacityAvailable;
+      const body = CreepManager.getOptimalBody(CreepRole.Upgrader, energy);
+      CreepManager.requestCreep({
+        role: CreepRole.Upgrader,
+        body: body,
+        priority: 99, // Just below emergency harvester
+        roomName: room.name,
+        memory: {
+          role: CreepRole.Upgrader
+        }
+      });
+    }
+
+    // 3. Spawn harvesters up to config max
+    if (harvesterCount < maxHarvesters) {
+      const energy = room.energyCapacityAvailable;
+      const body = CreepManager.getOptimalBody(CreepRole.Harvester, energy);
       CreepManager.requestCreep({
         role: CreepRole.Harvester,
         body: body,
@@ -614,14 +644,12 @@ export class RoomManager {
         }
       });
     }
-    
-    // Request upgraders if needed (only if we have at least 1 harvester)
-    if (upgraderCount < maxUpgraders && harvesterCount > 0) {
-      // Determine body based on available energy
+
+    // 4. Spawn upgraders up to config max (if at least 1 harvester exists)
+    //    (or more if emergency)
+    if ((upgraderCount < maxUpgraders && harvesterCount > 0) || needEmergencyUpgrader) {
       const energy = room.energyCapacityAvailable;
       const body = CreepManager.getOptimalBody(CreepRole.Upgrader, energy);
-
-      // Request spawning
       CreepManager.requestCreep({
         role: CreepRole.Upgrader,
         body: body,
@@ -633,21 +661,16 @@ export class RoomManager {
       });
     }
 
-    // Request builders if needed (only if we have at least 1 harvester)
+    // 5. Spawn builders up to config max (if at least 1 harvester exists)
+    //    Only if there is work to do
     if (builderCount < maxBuilders && harvesterCount > 0) {
-      // Check if we have construction sites or damaged structures
       const constructionSites = room.find(FIND_MY_CONSTRUCTION_SITES);
       const damagedStructures = room.find(FIND_STRUCTURES, {
         filter: structure => structure.hits < structure.hitsMax * 0.75
       });
-
-      // Only spawn builders if there's work to do
       if (constructionSites.length > 0 || damagedStructures.length > 0) {
-        // Determine body based on available energy
         const energy = room.energyCapacityAvailable;
         const body = CreepManager.getOptimalBody(CreepRole.Builder, energy);
-
-        // Request spawning
         CreepManager.requestCreep({
           role: CreepRole.Builder,
           body: body,
@@ -660,6 +683,11 @@ export class RoomManager {
         });
       }
     }
+
+    Logger.info(`[${room.name}] RCL: ${rcl}, Harvesters: ${harvesterCount}/${maxHarvesters}, Upgraders: ${upgraderCount}/${maxUpgraders}, Builders: ${builderCount}/${maxBuilders}`);
+
+    const myCreeps = _.filter(Game.creeps, c => c.memory.role === 'harvester' && c.memory.homeRoom === room.name);
+    Logger.info(`[${room.name}] Harvester names: ${myCreeps.map(c => c.name).join(', ')}`);
   }
   
   /**
