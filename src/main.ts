@@ -464,7 +464,20 @@ export function loop(): void {
     
     // Process colony (multi-room coordination)
     ColonyManager.run();
-    
+
+    // --- Creep planning and request logic (FIX) ---
+    for (const room of Object.values(Game.rooms)) {
+      if (room.controller && room.controller.my) {
+        const roomProfile = CreepManager.buildRoomProfile(room);
+        const empireProfile = CreepManager.buildEmpireProfile();
+        const requests = CreepManager.planCreeps(roomProfile, empireProfile);
+        for (const req of requests) {
+          CreepManager.requestCreep(req);
+        }
+      }
+    }
+    // --- END FIX ---
+
     // Process creeps
     CreepManager.runCreeps();
     

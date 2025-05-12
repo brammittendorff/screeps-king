@@ -414,3 +414,88 @@ This ensures your rooms remain free of abandoned or enemy structures, improving 
 ### AI Roles
 
 - **Destroyer:** Automatically spawned when any non-owned hostile or neutral structure is detected in your room. The destroyer will seek out and attack these structures (spawns, extensions, towers, terminals, labs, links, factories, etc.), prioritizing spawns first, then other structures, and will idle if nothing is left to destroy. The destroyer will not target roads, containers, ramparts, walls, or controllers.
+
+# Screeps-King Bot: Room Level (RCL) Progression & Setup
+
+## Overview
+This bot is designed for robust, professional Screeps empire management. It adapts its strategy and creep composition as your rooms progress from RCL 1 to RCL 8.
+
+---
+
+## Main Loop & Planning
+- **Every tick:**
+  - For each owned room:
+    - Build a profile of the room's state (energy, creeps, construction, etc.)
+    - Plan what creeps are needed (harvesters, upgraders, builders, etc.)
+    - Request those creeps (add to spawn queue)
+  - Process the spawn queue (spawn creeps as soon as possible)
+- **Creep roles are managed independently** (harvesters, upgraders, builders, haulers, etc.)
+- **Builders and upgraders are always present when needed**
+
+---
+
+## RCL 1–8: Creep & Strategy Breakdown
+
+### **RCL 1**
+- **Harvesters:** Up to 2 per source (max 4 for 2 sources)
+- **Upgraders:** Always at least 1
+- **Builders:** 1 if there are construction sites
+- **No haulers** (harvesters deliver energy directly)
+- **Goal:** Rapidly level up, keep controller safe, build essential structures
+
+### **RCL 2**
+- **Harvesters:** Up to 2 per source (max 4)
+- **Upgraders:** Always at least 1
+- **Builders:** 1 if there are construction sites
+- **No haulers**
+- **Goal:** Continue fast leveling, start building extensions and roads
+
+### **RCL 3**
+- **Harvesters:** 1 per source (max 2)
+- **Upgraders:** 1 (more if storage energy is high)
+- **Builders:** Up to 2 (scales with construction sites)
+- **Haulers:** May start to appear if storage/containers exist
+- **Goal:** Build towers, storage, and more extensions
+
+### **RCL 4**
+- **Harvesters:** 1 per source (max 2)
+- **Upgraders:** 1–2 (scales with storage energy)
+- **Builders:** Up to 2
+- **Haulers:** 1 per source (if storage exists)
+- **Goal:** Automate energy logistics, build advanced structures
+
+### **RCL 5–6**
+- **Harvesters:** 1 per source (max 2)
+- **Upgraders:** 1–3 (scales with storage energy)
+- **Builders:** Up to 2
+- **Haulers:** 1 per source
+- **Specialists:** Defenders, remote miners, reservers as needed
+- **Goal:** Expand, defend, optimize logistics
+
+### **RCL 7–8**
+- **Harvesters:** 1 per source (max 2)
+- **Upgraders:** Up to 5 (if storage energy is abundant)
+- **Builders:** Up to 2
+- **Haulers:** 1 per source
+- **Specialists:** More advanced roles (labs, power, empire-wide logistics)
+- **Goal:** Maximize GCL, empire expansion, and late-game infrastructure
+
+---
+
+## Setup & Best Practices
+- **Every tick:**
+  - Plan creeps for each room
+  - Request creeps
+  - Process spawn queue
+- **Creep roles are assigned and managed independently**
+- **Builders only spawned if there are construction sites**
+- **Upgraders always present (never blocked by harvester logic)**
+- **Harvesters are capped per source to avoid crowding**
+- **Haulers appear when storage/containers are present**
+- **Empire-level logic (expansion, defense, remote mining) is layered on top**
+
+---
+
+## Customization
+- You can tune the number of upgraders, builders, or haulers by editing `planCreeps` in `src/managers/creep-manager.ts`.
+- Advanced features (remote mining, empire defense, etc.) can be added modularly.
