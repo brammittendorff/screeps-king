@@ -34,4 +34,4 @@ type FilterOptions<T> = { filter?: (obj: T) => boolean } | { filter?: { [key: st
 
 if (Memory.analytics && Memory.analytics.history && Memory.analytics.history.length > 100) {
   Memory.analytics.history = Memory.analytics.history.slice(-100);
-} 
+}

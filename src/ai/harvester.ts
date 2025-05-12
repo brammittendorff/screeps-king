@@ -142,11 +142,18 @@ export class HarvesterAI {
     const memory = creep.memory;
     // If carrying energy, deliver to highest priority target
     if (creep.store[RESOURCE_ENERGY] > 0) {
-      // 1. Extensions and spawn
-      let targets = RoomCache.get(creep.room, FIND_MY_STRUCTURES).filter((s) => (s.structureType === STRUCTURE_EXTENSION || s.structureType === STRUCTURE_SPAWN) && (s as any).energy < (s as any).energyCapacity);
-      if (targets.length > 0) {
-        if (creep.transfer(targets[0], RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
-          creep.moveTo(targets[0], { reusePath: 10 });
+      // 1. Spawns first, then extensions
+      let spawns = RoomCache.get(creep.room, FIND_MY_STRUCTURES).filter((s) => s.structureType === STRUCTURE_SPAWN && (s as any).energy < (s as any).energyCapacity);
+      if (spawns.length > 0) {
+        if (creep.transfer(spawns[0], RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+          creep.moveTo(spawns[0], { reusePath: 10 });
+        }
+        return;
+      }
+      let extensions = RoomCache.get(creep.room, FIND_MY_STRUCTURES).filter((s) => s.structureType === STRUCTURE_EXTENSION && (s as any).energy < (s as any).energyCapacity);
+      if (extensions.length > 0) {
+        if (creep.transfer(extensions[0], RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+          creep.moveTo(extensions[0], { reusePath: 10 });
         }
         return;
       }
