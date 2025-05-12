@@ -1309,20 +1309,11 @@ export class CreepManager {
     const roomObj = Game.rooms[roomProfile.name];
     // --- EMPIRE-LEVEL: Emergency logic ---
     const harvesters = _.filter(Game.creeps, c => c.memory.role === CreepRole.Harvester && c.memory.homeRoom === name);
-    if (harvesters.length === 0) {
-      // Always ensure at least one harvester
-      requests.push({
-        role: CreepRole.Harvester,
-        body: this.getOptimalBody(CreepRole.Harvester, roomProfile.energyAvailable, roomObj),
-        priority: 120,
-        roomName: name,
-        memory: { role: CreepRole.Harvester, homeRoom: name }
-      });
-      return requests;
-    }
     // --- PROFESSIONAL ROOM BOOTSTRAP LOGIC ---
     // 1. Assign harvesters/miners to sources (big WORK bodies if possible)
     const sources = roomObj ? roomObj.find(FIND_SOURCES) : [];
+    // Allow up to 2 harvesters per source at RCL 1 and 2
+    const maxHarvestersPerSource = (rcl <= 2) ? 2 : 1;
     const harvesterAssignments: Record<string, number> = {};
     for (const source of sources) harvesterAssignments[source.id] = 0;
     for (const creep of harvesters) {
@@ -1332,7 +1323,7 @@ export class CreepManager {
     }
     let harvestersRequested = 0;
     for (const source of sources) {
-      if (harvesterAssignments[source.id] < 1) {
+      while (harvesterAssignments[source.id] < maxHarvestersPerSource) {
         // Use largest possible harvester body for fast mining
         const harvesterBody = this.getOptimalBody(CreepRole.Harvester, roomProfile.energyCapacity, roomObj);
         requests.push({
@@ -1342,28 +1333,27 @@ export class CreepManager {
           roomName: name,
           memory: { role: CreepRole.Harvester, homeRoom: name, targetSourceId: source.id }
         });
+        harvesterAssignments[source.id]++;
         harvestersRequested++;
       }
     }
-    // Prevent over-spawning: never request more harvesters than sources
-    if (harvesters.length + harvestersRequested > sources.length) {
-      // Remove extra harvester requests if any
+    // Prevent over-spawning: never request more harvesters than allowed
+    if (harvesters.length + harvestersRequested > sources.length * maxHarvestersPerSource) {
       requests.splice(-harvestersRequested);
     }
-    // 2. Upgraders: use big WORK bodies if energy/storage is high
+    // --- UPGRADERS: Always plan independently of harvesters ---
     let desiredUpgraders = 1;
     let upgraderBody = this.getOptimalBody(CreepRole.Upgrader, roomProfile.energyCapacity, roomObj);
     if (emergency) {
       desiredUpgraders = Math.max(2, sources.length + 1);
     } else if (storageEnergy > 20000) {
       desiredUpgraders = Math.min(5, Math.floor(storageEnergy / 10000));
-      // If storage is very high, use max body for upgraders
       if (storageEnergy > 50000) {
         upgraderBody = this.getOptimalBody(CreepRole.Upgrader, Math.min(roomProfile.energyCapacity, 3000), roomObj);
       }
     }
     const upgraders = _.filter(Game.creeps, c => c.memory.role === CreepRole.Upgrader && c.memory.homeRoom === name);
-    if (upgraders.length < desiredUpgraders) {
+    while (upgraders.length + requests.filter(r => r.role === CreepRole.Upgrader).length < desiredUpgraders) {
       requests.push({
         role: CreepRole.Upgrader,
         body: upgraderBody,
