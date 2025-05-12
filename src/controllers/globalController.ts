@@ -1,7 +1,7 @@
 import { MemoryManager } from '../managers/memory-manager';
 import { AI } from '../ai';
 import { Logger } from '../utils/logger';
-import { RoomManager } from '../managers/room-manager';
+import { runRoomLogic } from '../managers/room-manager';
 
 export const globalController = {
   memory: {
@@ -33,7 +33,7 @@ export const globalController = {
   room: {
     default: {
       routine: (room: Room) => {
-        RoomManager.runRoomLogic(room);
+        runRoomLogic(room);
       },
       stage0: (room: Room) => {},
       stage1: (room: Room) => {},

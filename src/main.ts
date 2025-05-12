@@ -9,7 +9,7 @@ import { Logger } from './utils/logger';
 import { StatsDisplay } from './utils/stats-display';
 import { MemoryManager } from './managers/memory-manager';
 import { CreepManager } from './managers/creep-manager';
-import { RoomManager } from './managers/room-manager';
+import { runRoomLogic, runRooms, initRoomManager } from './managers/room-manager';
 import { ColonyManager } from './managers/colony-manager';
 import { StructureManager } from './managers/structure-manager';
 import { TaskManager } from './managers/task-manager';
@@ -150,7 +150,7 @@ global.controller = {
   room: {
     default: {
       routine: (room: Room) => {
-        RoomManager.runRoomLogic(room);
+        runRoomLogic(room);
       },
       stage0: (room: Room) => {
         // Stage 0 logic is now in RoomManager
@@ -224,7 +224,6 @@ export function loop(): void {
     try { TaskManager.cleanup(); } catch (e) { Logger.error(`Error in TaskManager.cleanup: ${(e as Error).stack || (e as Error).message}`); }
     try { ColonyManager.cleanup(); } catch (e) { Logger.error(`Error in ColonyManager.cleanup: ${(e as Error).stack || (e as Error).message}`); }
     try { StructureManager.cleanup(); } catch (e) { Logger.error(`Error in StructureManager.cleanup: ${(e as Error).stack || (e as Error).message}`); }
-    try { RoomManager.cleanup(); } catch (e) { Logger.error(`Error in RoomManager.cleanup: ${(e as Error).stack || (e as Error).message}`); }
   }
   // Only run heavy cleanup every 20 ticks
   if (Game.time % 20 === 0) {
@@ -320,7 +319,7 @@ export function loop(): void {
       const room = Game.rooms[roomName];
       if (room.controller && room.controller.my) {
         try {
-          RoomManager.runRoomLogic(room);
+          runRoomLogic(room);
         } catch (e) {
           // Ignore errors in emergency mode
         }
@@ -435,7 +434,7 @@ export function loop(): void {
     // Initialize managers
     MemoryManager.init();
     TaskManager.init();
-    RoomManager.init();
+    initRoomManager();
     ColonyManager.init();
     
     // Clean up memory
@@ -470,7 +469,7 @@ export function loop(): void {
     CreepManager.runCreeps();
     
     // Process rooms
-    RoomManager.runRooms();
+    runRooms();
     
     // Process structures
     StructureManager.runStructures();

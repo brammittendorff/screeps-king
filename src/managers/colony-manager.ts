@@ -1,4 +1,4 @@
-import { RoomManager } from './room-manager';
+import { getRoomCache, getRoomData } from './room-manager';
 import { Logger } from '../utils/logger';
 import { ScoutHelper } from '../utils/scout-helper';
 import * as _ from 'lodash';
@@ -226,8 +226,8 @@ export class ColonyManager {
     this.roomsByType.reserved = [];
     
     // Get data from RoomManager
-    for (const roomName in RoomManager.getRoomCache()) {
-      const roomData = RoomManager.getRoomData(roomName);
+    for (const roomName in getRoomCache()) {
+      const roomData = getRoomData(roomName);
       
       if (roomData.ownedRoom) {
         this.roomsByType.owned.push(roomName);
@@ -367,9 +367,16 @@ export class ColonyManager {
   }
 
   /**
-   * Plan colony expansion
+   * Plan colony expansion (automated, robust, tunable)
    */
   private static planExpansion(): void {
+    // --- Expansion scoring weights (tune here) ---
+    const WEIGHT_SOURCES = 100;
+    const WEIGHT_MINERAL = 1; // already weighted below
+    const WEIGHT_SAFE = 50;
+    const WEIGHT_DISTANCE = 5; // closer = higher score
+    const WEIGHT_ENEMY_BORDER = -100;
+    const WEIGHT_HIGHWAY = -50;
     // --- Dynamic Expansion Pausing ---
     // Pause if any owned room is under attack (recent hostiles)
     let underAttack = false;
@@ -404,10 +411,8 @@ export class ColonyManager {
       Logger.info('Expansion paused: under attack, low energy, or recently lost a room.');
       return;
     }
-
-    // Only proceed if we have room for expansion (up to 4 rooms)
+    // Only proceed if we have room for expansion (GCL limit)
     if (this.roomsByType.owned.length >= Game.gcl.level) return;
-
     // Check if we're ready to expand (all current rooms at RCL 4+)
     let readyToExpand = true;
     for (const roomName of this.roomsByType.owned) {
@@ -417,88 +422,66 @@ export class ColonyManager {
         break;
       }
     }
-
     if (!readyToExpand) return;
-
-    // We already have targets, evaluate their status
-    if (Object.keys(Memory.colony.expansionTargets).length > 0) {
-      // Refresh expansion targets list by removing invalid ones and keeping valid ones
-      const validTargets: string[] = [];
-
-      for (const targetRoom of Object.keys(Memory.colony.expansionTargets)) {
-        const room = Game.rooms[targetRoom];
-
-        // If we can see the room, check if it's still a valid target
-        if (room) {
-          // Check if the room has a controller and it's not owned
-          if (room.controller && !room.controller.owner && !room.controller.reservation) {
-            // It's still a valid target
-            validTargets.push(targetRoom);
-          } else {
-            Logger.info(`Removed ${targetRoom} from expansion targets: no longer available`);
-          }
-        } else {
-          // We can't see the room, assume it's still valid
-          validTargets.push(targetRoom);
+    // --- Automated Expansion Target Selection ---
+    // 1. Gather all scouted rooms not owned/reserved/targeted
+    const potentialTargets: { roomName: string, score: number, sources: number, mineral: string, safe: boolean, distance: number }[] = [];
+    const myCoreRoom = this.roomsByType.owned[0]; // Use first owned room as core
+    for (const roomName in Memory.roomData) {
+      const data = Memory.roomData[roomName];
+      if (!data || data.ownedRoom || data.reservedRoom) continue;
+      // Skip if already a target
+      if (Memory.colony.expansionTargets && Memory.colony.expansionTargets.includes(roomName)) continue;
+      // Only consider rooms we've seen recently
+      if (!data.lastSeen || Game.time - data.lastSeen > 5000) continue;
+      // Evaluate safety: no strong enemy, not a highway, not a source keeper
+      const isHighway = /^.*[0|5]$/.test(roomName);
+      const isSourceKeeper = /^[WE][0-9][3|6][NS][0-9][3|6]$/.test(roomName);
+      const safe = (!data.owner && (!data.hostileCount || data.hostileCount < 2)) && !isHighway && !isSourceKeeper;
+      // Prefer 2-source rooms
+      const sources = data.sources ? data.sources.length : 0;
+      // Prefer rare minerals
+      const mineral = data.minerals && data.minerals[0] ? data.minerals[0].mineralType : '';
+      let mineralScore = 0;
+      if (mineral === RESOURCE_CATALYST) mineralScore = 30;
+      else if (mineral === RESOURCE_ZYNTHIUM || mineral === RESOURCE_KEANIUM) mineralScore = 20;
+      else if (mineral === RESOURCE_UTRIUM || mineral === RESOURCE_LEMERGIUM) mineralScore = 15;
+      else if (mineral === RESOURCE_HYDROGEN || mineral === RESOURCE_OXYGEN) mineralScore = 5;
+      // Distance from core room
+      let distance = 10;
+      if (myCoreRoom) {
+        distance = Game.map.getRoomLinearDistance(myCoreRoom, roomName);
+      }
+      // Penalize rooms adjacent to strong enemies (owner present)
+      let enemyBorderPenalty = 0;
+      const exits = Game.map.describeExits(roomName);
+      for (const dir in exits) {
+        const adjRoom = exits[dir];
+        const adjData = Memory.roomData[adjRoom];
+        if (adjData && adjData.owner && adjData.owner !== 'Invader') {
+          enemyBorderPenalty += WEIGHT_ENEMY_BORDER;
         }
       }
-
-      // Update expansion targets list
-      Memory.colony.expansionTargets = validTargets;
-
-      // If we still have enough targets, don't search for more
-      if (validTargets.length >= 2) return;
+      // Penalize highways
+      const highwayPenalty = isHighway ? WEIGHT_HIGHWAY : 0;
+      // Score: sources, mineral, safety, distance, enemy border, highway
+      const score = (sources * WEIGHT_SOURCES) + (mineralScore * WEIGHT_MINERAL) + (safe ? WEIGHT_SAFE : 0) + (Math.max(0, 20 - distance) * WEIGHT_DISTANCE) + enemyBorderPenalty + highwayPenalty;
+      potentialTargets.push({ roomName, score, sources, mineral, safe, distance });
     }
-
-    // Find new potential expansion targets
-    const potentialTargets: { roomName: string, score: number, sources: number }[] = [];
-
-    // Look at scouted rooms for potential targets
-    for (const roomName of Object.keys(this.roomsByType.scouted)) {
-      // Skip rooms that are already targets
-      if (Object.keys(Memory.colony.expansionTargets).includes(roomName)) continue;
-
-      // Get the room if we have visibility
-      const room = Game.rooms[roomName];
-      if (!room) continue;
-
-      // Use advanced score if available
-      let score = 0;
-      let sources = 0;
-      if (Memory.roomData[roomName] && typeof Memory.roomData[roomName].expansionScore === 'number') {
-        score = Memory.roomData[roomName].expansionScore;
-        sources = room.find(FIND_SOURCES).length;
-      } else {
-        score = ScoutHelper.evaluateRoom(room);
-        sources = room.find(FIND_SOURCES).length;
-      }
-
-      // If score is above threshold, add to potential targets
-      if (score >= 10) { // Lowered threshold to allow 1-source rooms if needed
-        potentialTargets.push({ roomName, score, sources });
-      }
+    // 2. Sort by score, prefer safe, 2-source, rare mineral, close rooms
+    potentialTargets.sort((a, b) => b.score - a.score);
+    // 3. Add top targets to expansionTargets
+    if (!Memory.colony.expansionTargets) Memory.colony.expansionTargets = [];
+    for (const target of potentialTargets) {
+      if (Memory.colony.expansionTargets.length >= 2) break;
+      Memory.colony.expansionTargets.push(target.roomName);
+      Logger.info(`[ColonyManager] Added expansion target: ${target.roomName} (score: ${target.score}, sources: ${target.sources}, mineral: ${target.mineral}, safe: ${target.safe}, distance: ${target.distance})`);
     }
-
-    // Prefer 2-source rooms, but allow 1-source if no 2-source available
-    let bestTargets = potentialTargets.filter(t => t.sources === 2);
-    if (bestTargets.length === 0) {
-      bestTargets = potentialTargets.filter(t => t.sources === 1);
-    }
-
-    // Sort best targets by score (highest first)
-    bestTargets.sort((a, b) => b.score - a.score);
-
-    // Add new targets to the expansion list
-    if (bestTargets.length > 0) {
-      // Add up to 2 new targets
-      for (let i = 0; i < Math.min(2, bestTargets.length); i++) {
-        const target = bestTargets[i].roomName;
-        if (!Object.keys(Memory.colony.expansionTargets).includes(target)) {
-          Memory.colony.expansionTargets.push(target);
-          Logger.info(`Added ${target} as expansion target with score ${bestTargets[i].score}`);
-        }
-      }
-    }
+    // 4. Remove invalid/claimed targets
+    Memory.colony.expansionTargets = Memory.colony.expansionTargets.filter(roomName => {
+      const data = Memory.roomData[roomName];
+      return data && !data.ownedRoom && !data.reservedRoom;
+    });
   }
 
   /**
