@@ -4,20 +4,21 @@
  * Enhanced with multi-room colony management
  */
 
-import { CONFIG } from './config';
-import { Logger } from './utils/logger';
-import { StatsDisplay } from './utils/stats-display';
-import { MemoryManager } from './managers/memory-manager';
-import { CreepManager } from './managers/creep-manager';
-import { runRoomLogic, runRooms, initRoomManager } from './managers/room-manager';
-import { ColonyManager } from './managers/colony-manager';
-import { StructureManager } from './managers/structure-manager';
-import { TaskManager } from './managers/task-manager';
-import { AI } from './ai';
+import { CONFIG } from '../configuration';
+import { Logger } from '../utils/logger';
+import { StatsDisplay } from '../utils/stats-display';
+import { MemoryManager } from '../management/memory-manager';
+import { CreepManager } from '../management/creep-manager';
+import { runRoomLogic, runRooms, initRoomManager } from '../management/room-manager';
+import { ColonyManager } from '../management/colony-manager';
+import { StructureManager } from '../management/structure-manager';
+import { TaskManager } from '../management/task-manager';
+import { AI } from '../roles';
 import * as _ from 'lodash';
-import { MarketTrends } from './utils/market-trends';
-import { RoomCache } from './utils/room-cache';
+import { MarketTrends } from '../utils/market-trends';
+import { RoomCache } from '../utils/room-cache';
 import { globalInit } from './global';
+import { RoomMapper } from '../planners/RoomPlanner';
 
 // Initialize global objects to maintain compatibility with the old code
 global.ai = AI as any;
@@ -278,7 +279,7 @@ export function loop(): void {
     const credits = Game.market ? Game.market.credits : 0;
 
     // TaskManager: log all active tasks
-    const allTasks = (global.TaskManager && global.TaskManager['tasks']) ? Object.values(global.TaskManager['tasks']) as import('./managers/task-manager').Task[] : [];
+    const allTasks = (global.TaskManager && global.TaskManager['tasks']) ? Object.values(global.TaskManager['tasks']) as import('../management/task-manager').Task[] : [];
     const taskTypeCounts: Record<string, number> = {};
     for (const t of allTasks) {
       taskTypeCounts[t.type] = (taskTypeCounts[t.type] || 0) + 1;
@@ -459,6 +460,13 @@ export function loop(): void {
         global.controller.memory.updateByRoom(room);
       } catch (e) {
         Logger.error(`Error updating memory for room ${room.name}: ${(e as Error).message}`);
+      }
+      // --- Room mapping and road planning ---
+      if (room.controller && room.controller.my) {
+        RoomMapper.mapRoom(room);
+        RoomMapper.planStructures(room);
+        RoomMapper.buildRoads(room);
+        RoomMapper.placePlannedConstructionSites(room);
       }
     });
     

@@ -63,40 +63,40 @@ export class UpgraderAI {
     } 
     // Harvesting state - collect energy
     else {
+      const mapping = creep.room.memory.mapping;
       const controller = creep.room.controller;
-      // Try to find dropped energy first (closest by path to creep)
-      let target = null;
-      if (global.helpers && global.helpers.findDroppedEnergy) {
-        const droppedEnergy = global.helpers.findDroppedEnergy(creep.room);
-        if (droppedEnergy.length > 0) {
-          target = creep.pos.findClosestByPath(droppedEnergy);
-          if (target) {
-            // Only one pipeline action per tick (Screeps rule)
-            if (CreepActionGuard.allow(creep, 'pickup')) {
-              if (creep.pickup(target) === ERR_NOT_IN_RANGE) {
-                const reusePath = getDynamicReusePath(creep, target);
-                creep.moveTo(target, { reusePath, visualizePathStyle: { stroke: '#ffaa00' } });
-              }
+      // Prefer containers/storage closest to the controller using mapping
+      if (mapping && mapping.controller && (mapping.sources || mapping.storage)) {
+        let containers: (StructureContainer | StructureStorage)[] = [];
+        // Find containers at all mapped sources
+        if (mapping.sources) {
+          for (const source of mapping.sources) {
+            const found = creep.room.lookForAt(LOOK_STRUCTURES, source.x, source.y)
+              .filter(s => s.structureType === STRUCTURE_CONTAINER && (s as StructureContainer).store.getUsedCapacity(RESOURCE_ENERGY) > 0);
+            containers = containers.concat(found as (StructureContainer | StructureStorage)[]);
+          }
+        }
+        // Add storage if present
+        if (mapping.storage) {
+          const storageObj = Game.getObjectById(mapping.storage.id as Id<StructureStorage>);
+          if (storageObj && storageObj.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
+            containers.push(storageObj as StructureStorage);
+          }
+        }
+        // Sort by distance to controller
+        if (controller && containers.length > 0) {
+          containers = containers.slice().sort((a, b) =>
+            controller.pos.getRangeTo(a.pos) - controller.pos.getRangeTo(b.pos)
+          );
+          const bestContainer = containers[0];
+          if (CreepActionGuard.allow(creep, 'withdraw')) {
+            if (creep.withdraw(bestContainer, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+              const reusePath = getDynamicReusePath(creep, bestContainer);
+              creep.moveTo(bestContainer, { reusePath, visualizePathStyle: { stroke: '#ffaa00' } });
             }
-            return;
           }
+          return;
         }
-      }
-      // Prefer containers/storage closest to the controller
-      if (controller && creep.room._containers && creep.room._containers.length > 0) {
-        // Sort containers by distance to controller
-        const containers = creep.room._containers.slice().sort((a, b) =>
-          controller.pos.getRangeTo(a.pos) - controller.pos.getRangeTo(b.pos)
-        );
-        const bestContainer = containers[0];
-        // Only one pipeline action per tick (Screeps rule)
-        if (CreepActionGuard.allow(creep, 'withdraw')) {
-          if (creep.withdraw(bestContainer, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
-            const reusePath = getDynamicReusePath(creep, bestContainer);
-            creep.moveTo(bestContainer, { reusePath, visualizePathStyle: { stroke: '#ffaa00' } });
-          }
-        }
-        return;
       }
       // Prefer source closest to the controller
       if (controller && creep.room._sources && creep.room._sources.length > 0) {

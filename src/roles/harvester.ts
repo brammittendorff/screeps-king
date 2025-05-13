@@ -33,38 +33,26 @@ export class HarvesterAI {
     CreepActionGuard.reset(creep);
     // Get or initialize creep memory
     const memory = creep.memory;
-    // Use RoomCache for sources and structures
-    const sources = RoomCache.get(creep.room, FIND_SOURCES);
-    const structures = RoomCache.get(creep.room, FIND_MY_STRUCTURES);
-    // Always define mineral for all states
-    const minerals = RoomCache.get(creep.room, FIND_MINERALS);
-    const mineral = minerals[0];
-    
-    // Initialize if needed
+    const mapping = creep.room.memory.mapping;
+    // --- Improved source assignment using mapping ---
     if (!memory.initiated) {
-      memory.activity = HarvesterState.Harvesting;
-
-      // Safely get target source ID
-      try {
+      if (mapping && mapping.sources && mapping.sources.length > 0) {
+        // Assign source by creep name hash (round-robin)
+        const idx = Math.abs(hashCode(creep.name)) % mapping.sources.length;
+        memory.targetSourceId = mapping.sources[idx].id;
+      } else {
+        // Fallback to old logic
         if (global.go && global.go.resource && global.go.resource.selectClosestTo) {
           memory.targetSourceId = global.go.resource.selectClosestTo(creep);
         } else {
-          // Fallback - find source directly
           const localSources = RoomCache.get(creep.room, FIND_SOURCES);
           if (localSources.length > 0) {
             const source = creep.pos.findClosestByRange(localSources);
             memory.targetSourceId = source ? source.id : null;
           }
         }
-      } catch (e) {
-        console.log(`Error finding source for ${creep.name}: ${e}`);
-        // Find any source as a fallback
-        const localSources = RoomCache.get(creep.room, FIND_SOURCES);
-        if (localSources.length > 0) {
-          memory.targetSourceId = localSources[0].id;
-        }
       }
-
+      memory.activity = HarvesterState.Harvesting;
       memory.initiated = true;
       creep.say('🌾 Work!');
     }
@@ -145,8 +133,26 @@ export class HarvesterAI {
    */
   private static doUnloading(creep: Creep): void {
     const memory = creep.memory;
-    // If carrying energy, deliver to highest priority target
     if (creep.store[RESOURCE_ENERGY] > 0) {
+      const mapping = creep.room.memory.mapping;
+      // 1. Try to deliver to container at source if present
+      if (mapping && mapping.sources && memory.targetSourceId) {
+        const sourceInfo = mapping.sources.find(s => s.id === memory.targetSourceId);
+        if (sourceInfo) {
+          // Find container at source position
+          const containers = creep.room.lookForAt(LOOK_STRUCTURES, sourceInfo.x, sourceInfo.y)
+            .filter(s => s.structureType === STRUCTURE_CONTAINER && (s as StructureContainer).store.getFreeCapacity(RESOURCE_ENERGY) > 0);
+          if (containers.length > 0) {
+            if (CreepActionGuard.allow(creep, 'transfer')) {
+              if (creep.transfer(containers[0], RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+                creep.moveTo(containers[0], { reusePath: getDynamicReusePath(creep, containers[0]) });
+              }
+            }
+            return;
+          }
+        }
+      }
+      // 2. Fallback to spawn/extensions/storage (old logic)
       // 1. Spawns first, then extensions
       const spawns = RoomCache.get(creep.room, FIND_MY_STRUCTURES).filter(
         (s) => s.structureType === STRUCTURE_SPAWN && s.store && s.store.getFreeCapacity(RESOURCE_ENERGY) > 0
@@ -180,16 +186,6 @@ export class HarvesterAI {
         }
         return;
       }
-      // 2. Controller container (if exists)
-      const controllerContainer = RoomCache.get(creep.room, FIND_MY_STRUCTURES).filter((s) => s.structureType === STRUCTURE_CONTAINER && creep.room.controller && s.pos.getRangeTo(creep.room.controller) <= 3 && s.store.getFreeCapacity(RESOURCE_ENERGY) > 0);
-      if (controllerContainer.length > 0) {
-        if (CreepActionGuard.allow(creep, 'transfer')) {
-          if (creep.transfer(controllerContainer[0], RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
-            creep.moveTo(controllerContainer[0], { reusePath: getDynamicReusePath(creep, controllerContainer[0]) });
-          }
-        }
-        return;
-      }
       // 3. Storage (if exists and not full)
       if (creep.room.storage && creep.room.storage.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
         if (CreepActionGuard.allow(creep, 'transfer')) {
@@ -208,6 +204,10 @@ export class HarvesterAI {
           }
         }
         return;
+      }
+      // 3. If no valid target, drop energy
+      if (CreepActionGuard.allow(creep, 'drop')) {
+        creep.drop(RESOURCE_ENERGY);
       }
     }
     // Switch back to harvesting if empty
@@ -306,4 +306,14 @@ export class HarvesterAI {
   public static saveState(creep: Creep, memory: CreepMemory): void {
     creep.memory = memory;
   }
+}
+
+// Helper for round-robin assignment
+function hashCode(str: string): number {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash) + str.charCodeAt(i);
+    hash |= 0;
+  }
+  return hash;
 }

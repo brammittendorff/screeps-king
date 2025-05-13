@@ -6,7 +6,7 @@
 import { Logger } from '../utils/logger';
 import * as _ from 'lodash';
 import { RoomCache } from '../utils/room-cache';
-import { CONFIG } from '../config';
+import { CONFIG } from '../configuration';
 
 export class MemoryManager {
   /**

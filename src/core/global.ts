@@ -1,7 +1,7 @@
-import { CONFIG } from './config';
-import { Logger } from './utils/logger';
-import { MemoryManager } from './managers/memory-manager';
-import { AI } from './ai';
+import { CONFIG } from '../configuration';
+import { Logger } from '../utils/logger';
+import { MemoryManager } from '../management/memory-manager';
+import { AI } from '../roles';
 import * as _ from 'lodash';
 
 export function globalInit() {
@@ -14,7 +14,7 @@ export function globalInit() {
 
   // Initialize global.go and resource functions to prevent undefined errors
   global.go = {
-    resource: require('./helpers/resource').resourceHelpers,
+    resource: require('../utils/helpers/resource').resourceHelpers,
     findAvailableSpawnInRoom: function(room) {
       var spawns = room.find(FIND_MY_SPAWNS);
       for (var i in spawns) {
@@ -28,8 +28,8 @@ export function globalInit() {
   };
 
   // Initialize global helpers
-  global.helpers = require('./helpers/creep').creepHelpers;
+  global.helpers = require('../utils/helpers/creep').creepHelpers;
 
   // Set up the global controller
-  global.controller = require('./controllers/globalController').globalController;
+  global.controller = require('../control/globalController').globalController;
 } 

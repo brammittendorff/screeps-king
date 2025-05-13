@@ -8,7 +8,7 @@ import { Logger } from '../utils/logger';
 import { Helpers } from '../utils/helpers';
 import { ScoutHelper } from '../utils/scout-helper';
 import * as _ from 'lodash';
-import { AI } from '../ai';
+import { AI } from '../roles';
 import { RoomCache } from '../utils/room-cache';
 
 export enum CreepRole {
@@ -1307,13 +1307,11 @@ export class CreepManager {
     const requests: CreepRequest[] = [];
     const { name, rcl, energyCapacity, storageEnergy, controllerDowngrade, emergency, hostiles, boostedHostiles, constructionSites, damagedStructures, creepCounts } = roomProfile;
     const roomObj = Game.rooms[roomProfile.name];
-    // --- EMPIRE-LEVEL: Emergency logic ---
-    const harvesters = _.filter(Game.creeps, c => c.memory.role === CreepRole.Harvester && c.memory.homeRoom === name);
-    // --- PROFESSIONAL ROOM BOOTSTRAP LOGIC ---
-    // 1. Assign harvesters/miners to sources (big WORK bodies if possible)
     const sources = roomObj ? roomObj.find(FIND_SOURCES) : [];
-    // Allow up to 2 harvesters per source at RCL 1 and 2
-    const maxHarvestersPerSource = (rcl <= 2) ? 2 : 1;
+    const mapping = roomObj?.memory?.mapping;
+    // Use mapping to determine max harvesters per source
+    let maxHarvestersPerSource: number[] = sources.map((s, i) => (mapping?.sources?.[i]?.spots || 1));
+    const harvesters = _.filter(Game.creeps, c => c.memory.role === CreepRole.Harvester && c.memory.homeRoom === name);
     const harvesterAssignments: Record<string, number> = {};
     for (const source of sources) harvesterAssignments[source.id] = 0;
     for (const creep of harvesters) {
@@ -1322,9 +1320,10 @@ export class CreepManager {
       }
     }
     let harvestersRequested = 0;
-    for (const source of sources) {
-      while (harvesterAssignments[source.id] < maxHarvestersPerSource) {
-        // Use largest possible harvester body for fast mining
+    for (let i = 0; i < sources.length; i++) {
+      const source = sources[i];
+      const maxH = maxHarvestersPerSource[i];
+      while (harvesterAssignments[source.id] < maxH) {
         const harvesterBody = this.getOptimalBody(CreepRole.Harvester, roomProfile.energyCapacity, roomObj);
         requests.push({
           role: CreepRole.Harvester,
@@ -1337,72 +1336,79 @@ export class CreepManager {
         harvestersRequested++;
       }
     }
-    // Prevent over-spawning: never request more harvesters than allowed
-    if (harvesters.length + harvestersRequested > sources.length * maxHarvestersPerSource) {
+    // No need to overspawn harvesters
+    if (harvesters.length + harvestersRequested > _.sum(maxHarvestersPerSource)) {
       requests.splice(-harvestersRequested);
     }
-    // --- UPGRADERS: Always plan independently of harvesters ---
-    let desiredUpgraders = 1;
-    let upgraderBody = this.getOptimalBody(CreepRole.Upgrader, roomProfile.energyCapacity, roomObj);
-    if (emergency) {
-      desiredUpgraders = Math.max(2, sources.length + 1);
-    } else if (storageEnergy > 20000) {
-      desiredUpgraders = Math.min(5, Math.floor(storageEnergy / 10000));
-      if (storageEnergy > 50000) {
-        upgraderBody = this.getOptimalBody(CreepRole.Upgrader, Math.min(roomProfile.energyCapacity, 3000), roomObj);
+    // --- HAULERS ---
+    let desiredHaulers = 0;
+    const containers = roomObj ? roomObj.find(FIND_STRUCTURES, { filter: s => s.structureType === STRUCTURE_CONTAINER }) : [];
+    if (rcl >= 3 && (roomObj && (roomObj.storage || containers.length > 0))) {
+      // 1 hauler per source for RCL 3-4, scale up for RCL 5+
+      if (rcl < 5) {
+        desiredHaulers = sources.length;
+      } else {
+        // For RCL 5+, scale with distance/energy throughput
+        desiredHaulers = Math.max(sources.length, Math.floor((storageEnergy + _.sumBy(containers, c => c.store[RESOURCE_ENERGY] || 0)) / 20000));
       }
     }
-    const upgraders = _.filter(Game.creeps, c => c.memory.role === CreepRole.Upgrader && c.memory.homeRoom === name);
-    while (upgraders.length + requests.filter(r => r.role === CreepRole.Upgrader).length < desiredUpgraders) {
-      requests.push({
-        role: CreepRole.Upgrader,
-        body: upgraderBody,
-        priority: 100,
-        roomName: name,
-        memory: { role: CreepRole.Upgrader, homeRoom: name }
-      });
-    }
-    // 3. Builder logic: Only spawn if there are construction sites
-    let desiredBuilders = 0;
-    if (constructionSites > 0) {
-      desiredBuilders = Math.min(2, Math.ceil(constructionSites / 5));
-      if (rcl < 4) desiredBuilders = 1; // Limit builders before RCL 4
-    }
-    const builders = _.filter(Game.creeps, c => c.memory.role === CreepRole.Builder && c.memory.homeRoom === name);
-    if (builders.length < desiredBuilders) {
-      requests.push({
-        role: CreepRole.Builder,
-        body: this.getOptimalBody(CreepRole.Builder, roomProfile.energyCapacity, roomObj),
-        priority: 90,
-        roomName: name,
-        memory: { role: CreepRole.Builder, homeRoom: name }
-      });
-    }
-    // 4. Hauler logic: Only after RCL 4 or if storage exists
-    let desiredHaulers = 0;
-    if (rcl >= 4 || (roomObj && roomObj.storage)) {
-      desiredHaulers = sources.length;
-    }
     const haulers = _.filter(Game.creeps, c => c.memory.role === CreepRole.Hauler && c.memory.homeRoom === name);
-    if (haulers.length < desiredHaulers) {
+    while (haulers.length + requests.filter(r => r.role === CreepRole.Hauler).length < desiredHaulers) {
       requests.push({
         role: CreepRole.Hauler,
         body: this.getOptimalBody(CreepRole.Hauler, roomProfile.energyCapacity, roomObj),
-        priority: 80,
+        priority: 100,
         roomName: name,
         memory: { role: CreepRole.Hauler, homeRoom: name }
       });
     }
-    // 5. Extra upgraders if energy is abundant and spawn is idle
-    if (storageEnergy > 30000 && upgraders.length < 5 && requests.length === 0) {
+    // --- UPGRADERS ---
+    // Use mapping to determine max upgraders (spots around controller or its container)
+    let maxUpgraders = mapping?.controller?.spots || 1;
+    let desiredUpgraders = Math.max(1, maxUpgraders);
+    if (emergency) {
+      desiredUpgraders = Math.max(desiredUpgraders, sources.length + 1);
+    } else if (storageEnergy > 20000) {
+      desiredUpgraders = Math.min(maxUpgraders, Math.floor(storageEnergy / 10000));
+      if (storageEnergy > 50000) {
+        // For high storage, allow larger upgraders
+        // (optionally scale body size here)
+      }
+    }
+    // For RCL 5+, allow more upgraders if lots of energy, but never more than maxUpgraders
+    if (rcl >= 5 && storageEnergy > 100000) {
+      desiredUpgraders = Math.max(desiredUpgraders, Math.min(maxUpgraders, Math.floor(storageEnergy / 50000)));
+    }
+    desiredUpgraders = Math.max(1, Math.min(desiredUpgraders, maxUpgraders));
+    const upgraders = _.filter(Game.creeps, c => c.memory.role === CreepRole.Upgrader && c.memory.homeRoom === name);
+    while (upgraders.length + requests.filter(r => r.role === CreepRole.Upgrader).length < desiredUpgraders) {
       requests.push({
         role: CreepRole.Upgrader,
         body: this.getOptimalBody(CreepRole.Upgrader, roomProfile.energyCapacity, roomObj),
-        priority: 60,
+        priority: 90,
         roomName: name,
         memory: { role: CreepRole.Upgrader, homeRoom: name }
       });
     }
+    // --- BUILDERS ---
+    // Builders: limit to available spots near sites (optional, for now scale with sites/energy)
+    let desiredBuilders = 0;
+    if (constructionSites > 0) {
+      if (rcl < 4) desiredBuilders = 1;
+      else desiredBuilders = Math.min(maxUpgraders, Math.ceil(constructionSites / 5));
+    }
+    const builders = _.filter(Game.creeps, c => c.memory.role === CreepRole.Builder && c.memory.homeRoom === name);
+    while (builders.length + requests.filter(r => r.role === CreepRole.Builder).length < desiredBuilders) {
+      requests.push({
+        role: CreepRole.Builder,
+        body: this.getOptimalBody(CreepRole.Builder, roomProfile.energyCapacity, roomObj),
+        priority: 80,
+        roomName: name,
+        memory: { role: CreepRole.Builder, homeRoom: name }
+      });
+    }
+    // --- DEFENDERS (optional, not changed) ---
+    // ... existing code ...
     return requests;
   }
 }

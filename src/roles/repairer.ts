@@ -3,8 +3,8 @@
  * Handles repair tasks in a fully task-driven way. Falls back to building/upgrading if no repair tasks are available.
  */
 
-import { TaskManager } from '../managers/task-manager';
-import { RoomTaskManager } from '../managers/room-task-manager';
+import { TaskManager } from '../management/task-manager';
+import { RoomTaskManager } from '../management/room-task-manager';
 import { CreepActionGuard } from '../utils/helpers';
 
 export class RepairerAI {

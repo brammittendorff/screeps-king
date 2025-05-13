@@ -6,9 +6,9 @@
 
 import { Logger } from '../utils/logger';
 import * as _ from 'lodash';
-import { TaskManager } from '../managers/task-manager';
+import { TaskManager } from '../management/task-manager';
 import { RoomCache } from '../utils/room-cache';
-import { RoomTaskManager } from '../managers/room-task-manager';
+import { RoomTaskManager } from '../management/room-task-manager';
 import { CreepActionGuard } from '../utils/helpers';
 
 export class HaulerAI {
@@ -72,6 +72,32 @@ export class HaulerAI {
       return;
     } else {
       // COLLECTING
+      // Use mapping for optimal collection
+      const mapping = creep.room.memory.mapping;
+      if (!creep.memory.working && mapping && mapping.sources && mapping.sources.length > 0 && mapping.storage) {
+        // Prefer containers at sources or storage
+        let containers: (StructureContainer | StructureStorage)[] = [];
+        for (const source of mapping.sources) {
+          const found = creep.room.lookForAt(LOOK_STRUCTURES, source.x, source.y)
+            .filter(s => s.structureType === STRUCTURE_CONTAINER && (s as StructureContainer).store.getUsedCapacity(RESOURCE_ENERGY) > 0);
+          containers = containers.concat(found as (StructureContainer | StructureStorage)[]);
+        }
+        if (mapping.storage) {
+          const storageObj = Game.getObjectById(mapping.storage.id as Id<StructureStorage>);
+          if (storageObj && storageObj.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
+            containers.push(storageObj as StructureStorage);
+          }
+        }
+        containers = _.sortBy(containers, s => -((s as StructureContainer | StructureStorage).store[RESOURCE_ENERGY]));
+        if (containers.length > 0) {
+          if (CreepActionGuard.allow(creep, 'withdraw')) {
+            if (creep.withdraw(containers[0], RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+              creep.moveTo(containers[0], { reusePath: 10 });
+            }
+          }
+          return;
+        }
+      }
       // Use batched pickup targets
       const pickupTargets = roomTasks.pickup
         .map(id => Game.getObjectById(id))

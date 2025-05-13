@@ -7,7 +7,7 @@
 import { Logger } from '../utils/logger';
 import * as _ from 'lodash';
 import { getDynamicReusePath } from '../utils/helpers';
-import { TaskManager } from '../managers/task-manager';
+import { TaskManager } from '../management/task-manager';
 import { CreepActionGuard } from '../utils/helpers';
 
 enum BuilderState {
@@ -119,53 +119,30 @@ export class BuilderAI {
     }
     
     // Check for dropped resources or containers first
-    const droppedResources = creep.room.find(FIND_DROPPED_RESOURCES, {
-      filter: resource => resource.resourceType === RESOURCE_ENERGY
-    });
-    
-    // If there are dropped resources, pick them up
-    if (droppedResources.length > 0) {
-      const closestResource = creep.pos.findClosestByRange(droppedResources);
-      if (closestResource) {
-        if (creep.pickup(closestResource) === ERR_NOT_IN_RANGE) {
-          creep.moveTo(closestResource, {
+    const mapping = creep.room.memory.mapping;
+    if (mapping && mapping.sources && mapping.sources.length > 0 && mapping.storage) {
+      let containers: (StructureContainer | StructureStorage)[] = [];
+      for (const source of mapping.sources) {
+        const found = creep.room.lookForAt(LOOK_STRUCTURES, source.x, source.y)
+          .filter(s => s.structureType === STRUCTURE_CONTAINER && (s as StructureContainer).store.getUsedCapacity(RESOURCE_ENERGY) > 0);
+        containers = containers.concat(found as (StructureContainer | StructureStorage)[]);
+      }
+      if (mapping.storage) {
+        const storageObj = Game.getObjectById(mapping.storage.id as Id<StructureStorage>);
+        if (storageObj && storageObj.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
+          containers.push(storageObj as StructureStorage);
+        }
+      }
+      containers = _.sortBy(containers, s => -((s as StructureContainer | StructureStorage).store[RESOURCE_ENERGY]));
+      if (containers.length > 0) {
+        if (creep.withdraw(containers[0], RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+          creep.moveTo(containers[0], {
             visualizePathStyle: { stroke: '#ffaa00' },
-            reusePath: getDynamicReusePath(creep, closestResource)
+            reusePath: getDynamicReusePath(creep, containers[0])
           });
         }
         return;
       }
-    }
-    
-    // Look for containers with energy
-    const containers = creep.room.find(FIND_STRUCTURES, {
-      filter: structure => 
-        structure.structureType === STRUCTURE_CONTAINER && 
-        structure.store.getUsedCapacity(RESOURCE_ENERGY) > 0
-    }) as StructureContainer[];
-    
-    if (containers.length > 0) {
-      const closestContainer = creep.pos.findClosestByRange(containers);
-      if (closestContainer) {
-        if (creep.withdraw(closestContainer, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
-          creep.moveTo(closestContainer, {
-            visualizePathStyle: { stroke: '#ffaa00' },
-            reusePath: getDynamicReusePath(creep, closestContainer)
-          });
-        }
-        return;
-      }
-    }
-    
-    // Check for storage if we have it
-    if (creep.room.storage && creep.room.storage.store.getUsedCapacity(RESOURCE_ENERGY) > 1000) {
-      if (creep.withdraw(creep.room.storage, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
-        creep.moveTo(creep.room.storage, {
-          visualizePathStyle: { stroke: '#ffaa00' },
-          reusePath: getDynamicReusePath(creep, creep.room.storage)
-        });
-      }
-      return;
     }
     
     // Fallback to sources

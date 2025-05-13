@@ -1,7 +1,7 @@
-import { MemoryManager } from '../managers/memory-manager';
-import { AI } from '../ai';
+import { MemoryManager } from '../management/memory-manager';
+import { AI } from '../roles';
 import { Logger } from '../utils/logger';
-import { runRoomLogic } from '../managers/room-manager';
+import { runRoomLogic } from '../management/room-manager';
 
 export const globalController = {
   memory: {

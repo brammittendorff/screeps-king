@@ -10,7 +10,7 @@ dotenv.config();
 const BUILD_ID = Date.now().toString();
 
 module.exports = {
-  entry: './src/main.ts',
+  entry: './src/core/main.ts',
   mode: 'development',
   devtool: 'source-map',
   target: 'node',

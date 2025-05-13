@@ -71,6 +71,7 @@ interface RoomMemory {
   progressHistory?: number[];
   idleTicks?: { [role: string]: number };
   extensionFillStats?: { full: number; empty: number; ticks: number };
+  mapping?: any;
 }
 
 // For scouted rooms, use a dedicated type
