@@ -14,12 +14,57 @@ export class HarvesterStrategy implements RoleStrategy {
    * Get optimal body parts based on available energy and RCL
    */
   public getBodyParts(energy: number, rcl: number): BodyPartConstant[] {
-    // Basic harvester - all RCL levels
+    // Based on Screeps mechanics: 
+    // - Source produces 10 energy/tick (3000 energy over 300 ticks)
+    // - Each WORK part harvests 2 energy/tick
+    // - 5 WORK parts will fully extract a source (5 × 2 = 10 energy/tick)
+    
+    // RCL 1 strategy: Balanced smaller harvesters to maximize concurrent work
+    if (rcl === 1) {
+      // Optimal early designs based on Screeps community best practices
+      if (energy >= 300) return [WORK, WORK, CARRY, MOVE]; // 300 energy - double WORK (4 energy/tick)
+      if (energy >= 250) return [WORK, CARRY, CARRY, MOVE]; // 250 energy - balanced
+      if (energy >= 200) return [WORK, CARRY, MOVE]; // 200 energy - minimum viable (WCM)
+      return [WORK, CARRY, MOVE]; // Fallback
+    }
+    
+    // RCL 2 strategy: Stronger harvesters but still distributed
+    if (rcl === 2) {
+      // At RCL 2 we're building toward 5 WORK parts per source
+      if (energy >= 500) return [WORK, WORK, WORK, CARRY, MOVE, MOVE]; // 500 energy - 6 energy/tick
+      if (energy >= 400) return [WORK, WORK, CARRY, MOVE, MOVE, MOVE]; // 400 energy - more mobility
+      if (energy >= 350) return [WORK, WORK, CARRY, MOVE, MOVE]; // 350 energy - reliable
+      if (energy >= 300) return [WORK, WORK, CARRY, MOVE]; // 300 energy - efficient core
+      if (energy >= 200) return [WORK, CARRY, MOVE]; // Fallback
+      return [WORK, CARRY, MOVE]; // Minimum viable
+    }
+    
+    // RCL 3 strategy: Transition to dedicated harvesters
+    if (rcl === 3) {
+      // For RCL 3 we start to transition toward stationary harvesters
+      if (energy >= 700) return [WORK, WORK, WORK, WORK, CARRY, MOVE, MOVE]; // 700 energy - 8 energy/tick
+      if (energy >= 550) return [WORK, WORK, WORK, CARRY, MOVE, MOVE]; // 550 energy - 6 energy/tick
+      if (energy >= 450) return [WORK, WORK, WORK, CARRY, MOVE]; // 450 energy - 6 energy/tick
+      if (energy >= 400) return [WORK, WORK, CARRY, CARRY, MOVE, MOVE]; // 400 energy - balanced
+      if (energy >= 300) return [WORK, WORK, CARRY, MOVE]; // 300 energy - basic double WORK
+      return [WORK, CARRY, MOVE]; // Minimum viable
+    }
+    
+    if (rcl <= 5) {
+      // Mid-game efficiency starts to matter more
+      if (energy >= 550) return [WORK, WORK, WORK, CARRY, CARRY, MOVE, MOVE, MOVE];
+      if (energy >= 450) return [WORK, WORK, CARRY, CARRY, MOVE, MOVE, MOVE];
+      if (energy >= 400) return [WORK, WORK, CARRY, CARRY, MOVE, MOVE];
+      if (energy >= 300) return [WORK, WORK, CARRY, MOVE];
+      return [WORK, CARRY, MOVE];
+    }
+    
+    // For late game (RCL 6+), focus on maximum efficiency harvesting
+    if (energy >= 800) return [WORK, WORK, WORK, WORK, WORK, CARRY, CARRY, MOVE, MOVE, MOVE];
+    if (energy >= 650) return [WORK, WORK, WORK, WORK, CARRY, CARRY, MOVE, MOVE, MOVE];
     if (energy >= 550) return [WORK, WORK, WORK, CARRY, CARRY, MOVE, MOVE, MOVE];
     if (energy >= 400) return [WORK, WORK, CARRY, CARRY, MOVE, MOVE];
-    if (energy >= 300) return [WORK, WORK, CARRY, MOVE];
-    if (energy >= 200) return [WORK, CARRY, MOVE];
-    return [WORK, CARRY, MOVE];
+    return [WORK, WORK, CARRY, MOVE];
   }
   
   /**
@@ -47,14 +92,69 @@ export class HarvesterStrategy implements RoleStrategy {
     let source: Source | null;
     if (creep.memory.targetSourceId) {
       source = Game.getObjectById(creep.memory.targetSourceId as Id<Source>);
-    } else {
-      // Find active source - make sure we use FIND_SOURCES if no active source found
-      source = creep.pos.findClosestByPath(FIND_SOURCES_ACTIVE) || 
-               creep.pos.findClosestByPath(FIND_SOURCES);
       
+      // If the source doesn't exist anymore, clear the assignment
+      if (!source) {
+        delete creep.memory.targetSourceId;
+      }
+    }
+    
+    // If we don't have a source assignment, pick a new one intelligently
+    if (!source) {
+      const room = creep.room;
+      const sources = room.find(FIND_SOURCES);
+      
+      // Count harvester assignments per source
+      const harvesterCounts: Record<string, number> = {};
+      for (const source of sources) {
+        harvesterCounts[source.id] = 0;
+      }
+      
+      // Count existing harvester assignments
+      const harvesters = _.filter(Game.creeps, c => 
+        c.memory.role === 'harvester' && 
+        c.memory.homeRoom === room.name && 
+        c.memory.targetSourceId !== undefined
+      );
+      
+      for (const harvester of harvesters) {
+        const targetId = harvester.memory.targetSourceId as Id<Source>;
+        if (targetId && harvesterCounts[targetId] !== undefined) {
+          harvesterCounts[targetId]++;
+        }
+      }
+      
+      // Get source with available spots from mapping
+      const mapping = room.memory.mapping;
+      const sourceInfos = mapping?.sources || [];
+      let bestSource = null;
+      let lowestRatio = Infinity;
+      
+      for (let i = 0; i < sources.length; i++) {
+        const sourceId = sources[i].id;
+        const sourceInfo = sourceInfos[i];
+        const assignedHarvesters = harvesterCounts[sourceId] || 0;
+        const availableSpots = sourceInfo?.spots || 1;
+        
+        // Calculate assignment ratio (lower is better)
+        const ratio = assignedHarvesters / availableSpots;
+        
+        // Prefer source with lowest harvester-to-spot ratio
+        if (ratio < lowestRatio) {
+          lowestRatio = ratio;
+          bestSource = sources[i];
+        }
+      }
+      
+      // Fallback to closest source if we couldn't find a best one
+      source = bestSource || 
+              creep.pos.findClosestByPath(FIND_SOURCES_ACTIVE) || 
+              creep.pos.findClosestByPath(FIND_SOURCES);
+              
       // Save the source ID for future reference
       if (source) {
         creep.memory.targetSourceId = source.id;
+        console.log(`Harvester ${creep.name} assigned to source ${source.id} with ratio ${lowestRatio}`);
       }
     }
     

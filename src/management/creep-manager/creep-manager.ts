@@ -347,35 +347,63 @@ export class CreepManager {
     }
     
     let harvestersRequested = 0;
-    // Evenly distribute new harvesters to sources with least assigned (and available spots)
+    
+    // Calculate total needed harvesters based on available spots
     let totalNeeded = 0;
     for (let i = 0; i < sources.length; i++) {
       totalNeeded += maxHarvestersPerSource[i];
     }
     
-    while (harvesters.length + harvestersRequested < totalNeeded) {
-      // Find the source with the fewest assigned harvesters and available spots
-      let minAssigned = Infinity;
-      let minSourceIdx = 0;
+    // First, make sure we log current assignments for debugging
+    if (Game.time % 100 === 0) {
+      console.log(`Room ${name} - Source assignments:`);
       for (let i = 0; i < sources.length; i++) {
-        const assigned = harvesterAssignments[sources[i].id];
-        if (assigned < maxHarvestersPerSource[i] && assigned < minAssigned) {
-          minAssigned = assigned;
-          minSourceIdx = i;
+        const sourceId = sources[i].id;
+        console.log(`Source ${sourceId} has ${harvesterAssignments[sourceId]}/${maxHarvestersPerSource[i]} harvesters assigned`);
+      }
+    }
+    
+    while (harvesters.length + harvestersRequested < totalNeeded) {
+      // Calculate assignment ratios for each source
+      let lowestRatio = Infinity;
+      let bestSourceIdx = -1;
+      
+      for (let i = 0; i < sources.length; i++) {
+        const sourceId = sources[i].id;
+        const assigned = harvesterAssignments[sourceId];
+        const maxForSource = maxHarvestersPerSource[i];
+        
+        // If source already has max harvesters, skip it
+        if (assigned >= maxForSource) continue;
+        
+        // Calculate ratio of assigned harvesters to max spots
+        const ratio = assigned / maxForSource;
+        
+        // Prefer source with lowest assignment ratio
+        if (ratio < lowestRatio) {
+          lowestRatio = ratio;
+          bestSourceIdx = i;
         }
       }
-      // If all sources are full, break
-      if (minAssigned === Infinity) break;
       
-      const source = sources[minSourceIdx];
+      // If we couldn't find a source with available spots, break
+      if (bestSourceIdx === -1) break;
+      
+      const source = sources[bestSourceIdx];
       const harvesterBody = this.getOptimalBody(CreepRole.Harvester, roomProfile.energyCapacity, roomObj);
+      
+      console.log(`Requesting harvester for source ${source.id} with ${harvesterAssignments[source.id]}/${maxHarvestersPerSource[bestSourceIdx]} harvesters (ratio: ${lowestRatio})`);
       
       requests.push({
         role: CreepRole.Harvester,
         body: harvesterBody,
         priority: 110,
         roomName: name,
-        memory: { role: CreepRole.Harvester, homeRoom: name, targetSourceId: source.id }
+        memory: { 
+          role: CreepRole.Harvester, 
+          homeRoom: name, 
+          targetSourceId: source.id
+        }
       });
       harvesterAssignments[source.id]++;
       harvestersRequested++;

@@ -17,18 +17,52 @@ export class HaulerStrategy implements RoleStrategy {
    * Get optimal body parts based on available energy and RCL
    */
   public getBodyParts(energy: number, rcl: number): BodyPartConstant[] {
-    // Early game (RCL 1-2): More CARRY parts
-    if (rcl <= 2) {
-      if (energy >= 400) return [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE];
-      if (energy >= 300) return [CARRY, CARRY, CARRY, MOVE, MOVE, MOVE]; 
-      return [CARRY, CARRY, MOVE, MOVE];
+    // Hauler capacity calculations based on harvester output:
+    // - Each CARRY part holds 50 energy
+    // - Need to match harvester production (2 energy per WORK part per tick)
+    // - Example: Harvester with 2 WORK parts produces 4 energy/tick
+    //   We need at least 4 × roundtrip-ticks / 50 CARRY parts
+    
+    // RCL 1: Small, fast haulers to match early harvester output
+    // At RCL 1, we have 1-2 WORK part harvesters (2-4 energy/tick)
+    if (rcl === 1) {
+      // In very early game, roads aren't usually present, so 1:1 CARRY:MOVE ratio
+      if (energy >= 300) return [CARRY, CARRY, CARRY, MOVE, MOVE, MOVE]; // 300 energy, 150 capacity
+      if (energy >= 250) return [CARRY, CARRY, MOVE, MOVE]; // 250 energy, 100 capacity, very fast
+      if (energy >= 200) return [CARRY, CARRY, MOVE]; // 200 energy, 100 capacity, compromise speed
+      return [CARRY, MOVE]; // Minimum viable - 50 capacity
     }
     
-    // Medium game (RCL 3-4): Balanced CARRY/MOVE
-    if (rcl <= 4) {
-      if (energy >= 800) return [CARRY, CARRY, CARRY, CARRY, CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE];
-      if (energy >= 500) return [CARRY, CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE];
-      return [CARRY, CARRY, CARRY, MOVE, MOVE, MOVE];
+    // RCL 2: Scaled haulers for 2-3 WORK part harvesters (4-6 energy/tick)
+    if (rcl === 2) {
+      // More CARRY capacity to match the harvester output
+      if (energy >= 400) return [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE]; // 400e, 200 capacity
+      if (energy >= 350) return [CARRY, CARRY, CARRY, MOVE, MOVE, MOVE]; // 350e, 150 capacity
+      if (energy >= 300) return [CARRY, CARRY, CARRY, MOVE, MOVE, MOVE]; // 300e, 150 capacity
+      if (energy >= 200) return [CARRY, CARRY, MOVE]; // 200e, 100 capacity
+      return [CARRY, MOVE]; // Minimum viable - 50 capacity
+    }
+    
+    // RCL 3: Balanced haulers for 3-4 WORK part harvesters (6-8 energy/tick)
+    // At this stage, some roads likely exist
+    if (rcl === 3) {
+      // With some roads, we can have more CARRY than MOVE (2:1 ratio)
+      if (energy >= 600) return [CARRY, CARRY, CARRY, CARRY, CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE]; // 600e, 400 capacity
+      if (energy >= 500) return [CARRY, CARRY, CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE]; // 500e, 300 capacity
+      if (energy >= 400) return [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE]; // 400e, 200 capacity, roads
+      if (energy >= 300) return [CARRY, CARRY, CARRY, MOVE, MOVE, MOVE]; // 300e, 150 capacity
+      return [CARRY, CARRY, MOVE]; // Minimum viable - 100 capacity
+    }
+    
+    // RCL 4: Efficient haulers for 4-5 WORK harvesters (8-10 energy/tick)
+    // Road network should be substantial
+    if (rcl === 4) {
+      // With good roads, can use 2:1 CARRY:MOVE ratio for efficiency
+      if (energy >= 800) return [CARRY, CARRY, CARRY, CARRY, CARRY, CARRY, CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE]; // 800e, 500 capacity
+      if (energy >= 650) return [CARRY, CARRY, CARRY, CARRY, CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE]; // 650e, 400 capacity
+      if (energy >= 500) return [CARRY, CARRY, CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE]; // 500e, 300 capacity
+      if (energy >= 400) return [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE]; // 400e, 200 capacity
+      return [CARRY, CARRY, CARRY, MOVE, MOVE]; // Minimum - 150 capacity
     }
     
     // Late game (RCL 5+): Large capacity haulers

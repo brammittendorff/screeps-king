@@ -22,21 +22,21 @@ export class UpgradeStrategyManager {
   // Strategies for each RCL level
   private static strategies: Record<number, UpgradeStrategy> = {
     1: {
-      desiredUpgraders: 2,      // More upgraders to get to RCL 2 fast
+      desiredUpgraders: 5,      // Increased - More upgraders to get to RCL 2 fast
       energyThreshold: 200,     // Low threshold, keep spawning
       storageReserve: 0,        // No reserve needed
       controllerPriority: 9,    // Very high priority - get to RCL 2 asap
       upgradeUntilStorage: true // Upgrade first priority until container
     },
     2: {
-      desiredUpgraders: 3,      // Still need fast progress to RCL 3
+      desiredUpgraders: 5,      // Increased - Fast progress to RCL 3
       energyThreshold: 400,     // Still low threshold
       storageReserve: 500,      // Minimal reserve
       controllerPriority: 8,    // High priority - extensions are valuable
       upgradeUntilStorage: true // Upgrade priority until container
     },
     3: {
-      desiredUpgraders: 4,      // More upgraders for RCL 4
+      desiredUpgraders: 6,      // Increased - More upgraders for RCL 4
       energyThreshold: 800,     // Higher threshold
       storageReserve: 1000,     // Some reserve for towers
       controllerPriority: 7,    // High priority - towers and storage next
@@ -150,22 +150,32 @@ export class UpgradeStrategyManager {
    */
   public static getUpgraderPriority(room: Room): number {
     const strategy = this.getStrategy(room);
+    const rcl = room.controller ? room.controller.level : 1;
     
     // Base priority from strategy (scale from 0-10 to 50-100)
     let priority = 50 + (strategy.controllerPriority * 5);
+    
+    // For low RCLs (1-3), increase priority substantially to ensure upgraders are spawned
+    if (rcl <= 3) {
+      priority += 20; // Higher base priority at low RCLs
+    }
     
     // Emergency case - controller about to downgrade
     if (room.controller && room.controller.ticksToDowngrade < 3000) {
       priority = 95; // Just below harvester priority
     }
     
-    // If no upgraders, increase priority
+    // If no upgraders, increase priority significantly
     const upgraders = _.filter(Game.creeps, 
       c => c.memory.role === CreepRole.Upgrader && c.memory.homeRoom === room.name
     );
     
     if (upgraders.length === 0) {
-      priority += 5; // Bump priority if none exists
+      priority += 15; // Higher boost if no upgraders exist
+    }
+    // If only one upgrader at low RCL, still boost priority
+    else if (upgraders.length < 2 && rcl <= 3) {
+      priority += 10; // Ensure we get at least 2 upgraders at low RCL
     }
     
     return priority;

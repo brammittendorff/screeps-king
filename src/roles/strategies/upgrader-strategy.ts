@@ -15,17 +15,54 @@ export class UpgraderStrategy implements RoleStrategy {
    * Get optimal body parts based on available energy and RCL
    */
   public getBodyParts(energy: number, rcl: number): BodyPartConstant[] {
-    // Early game (RCL 1-2): Simple upgraders
-    if (rcl <= 2) {
-      if (energy >= 400) return [WORK, WORK, CARRY, CARRY, MOVE, MOVE];
-      return [WORK, CARRY, MOVE];
+    // Key Screeps mechanics for upgraders:
+    // - Each WORK part uses 1 energy to upgrade controller for 1 point
+    // - Controller is often stationary, so movement efficiency is less critical
+    // - For upgraders, CARRY capacity is important to reduce trips
+    
+    // RCL 1: Prioritize getting to RCL 2 ASAP with multiple smaller upgraders
+    // Only takes 200 points to reach RCL 2
+    if (rcl === 1) {
+      // Multiply smaller, faster upgraders
+      if (energy >= 300) return [WORK, WORK, CARRY, MOVE]; // 300 energy - 2 WORK for faster upgrade
+      if (energy >= 250) return [WORK, CARRY, CARRY, MOVE]; // 250 energy - more carrying capacity
+      if (energy >= 200) return [WORK, CARRY, MOVE]; // 200 energy - minimum viable (WCM)
+      return [WORK, CARRY, MOVE]; // Fallback
     }
     
-    // Medium game (RCL 3-4): More WORK parts
-    if (rcl <= 4) {
-      if (energy >= 800) return [WORK, WORK, WORK, WORK, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE];
-      if (energy >= 550) return [WORK, WORK, WORK, CARRY, CARRY, MOVE, MOVE];
-      return [WORK, WORK, CARRY, MOVE];
+    // RCL 2: Focus on getting to RCL 3 (45,000 points)
+    // Balance multiple upgraders with slightly larger bodies
+    if (rcl === 2) {
+      // Prioritize WORK parts with enough CARRY to make trips worthwhile
+      if (energy >= 500) return [WORK, WORK, WORK, CARRY, CARRY, MOVE, MOVE]; // 500 energy - 3 WORK
+      if (energy >= 400) return [WORK, WORK, CARRY, CARRY, MOVE, MOVE]; // 400 energy - balanced
+      if (energy >= 350) return [WORK, WORK, CARRY, MOVE, MOVE]; // 350 energy - mobility
+      if (energy >= 300) return [WORK, WORK, CARRY, MOVE]; // 300 energy - double WORK
+      if (energy >= 200) return [WORK, CARRY, MOVE]; // 200 energy - minimum viable
+      return [WORK, CARRY, MOVE]; // Fallback
+    }
+    
+    // RCL 3: Progress toward RCL 4 (135,000 points)
+    // Start transitioning to more dedicated upgraders
+    if (rcl === 3) {
+      // More WORK and larger CARRY capacity for continuous upgrading
+      if (energy >= 700) return [WORK, WORK, WORK, WORK, CARRY, CARRY, MOVE, MOVE]; // 700 energy - 4 WORK
+      if (energy >= 550) return [WORK, WORK, WORK, CARRY, CARRY, MOVE, MOVE]; // 550 energy - balanced
+      if (energy >= 450) return [WORK, WORK, WORK, CARRY, MOVE, MOVE]; // 450 energy - 3 WORK
+      if (energy >= 400) return [WORK, WORK, CARRY, CARRY, MOVE, MOVE]; // 400 energy - standard
+      if (energy >= 300) return [WORK, WORK, CARRY, MOVE]; // 300 energy - basic
+      return [WORK, CARRY, MOVE]; // Fallback
+    }
+    
+    // RCL 4: Progress toward RCL 5 (405,000 points)
+    // Optimize for higher work output and increased capacity
+    if (rcl === 4) {
+      // Much larger upgraders for significant controller progress
+      if (energy >= 800) return [WORK, WORK, WORK, WORK, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE]; // 800 energy
+      if (energy >= 650) return [WORK, WORK, WORK, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE]; // 650 energy
+      if (energy >= 550) return [WORK, WORK, WORK, CARRY, CARRY, MOVE, MOVE]; // 550 energy
+      if (energy >= 400) return [WORK, WORK, CARRY, CARRY, MOVE, MOVE]; // 400 energy
+      return [WORK, WORK, CARRY, MOVE]; // Minimum viable at RCL 4
     }
     
     // Late game (RCL 5+): Optimized for controller upgrading
