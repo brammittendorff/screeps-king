@@ -5,7 +5,6 @@
 
 import { HarvesterAI } from './harvester';
 import { UpgraderAI } from './upgrader';
-import { TowerAI } from './tower';
 import { BuilderAI } from './builder';
 import { ClaimerAI } from './claimer';
 import { DestroyerAI } from './destroyer';
@@ -14,6 +13,9 @@ import { HaulerAI } from './hauler';
 import { ArcherAI } from './archer';
 import { ScoutAI } from './scout';
 import { RepairerAI } from './repairer';
+
+// Tower now moved to buildings
+import { TowerAI } from '../buildings/tower';
 
 // Export all AI modules
 export const AI = {

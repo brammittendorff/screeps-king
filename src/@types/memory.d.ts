@@ -2,11 +2,11 @@
 
 interface CreepMemory {
   role: string;
-  state?: string;
-  working?: boolean;
+  state?: string;           // State in the state machine pattern (harvesting, working, etc)
+  working?: boolean;        // Legacy state for creeps using the old system
   targetId?: Id<any>;
   buildMode?: number;
-  activity?: string;
+  activity?: string;        // Activity for creeps using the old system
   initiated?: boolean;
   sourceId?: Id<Source>;
   targetSourceId?: Id<Source>;
@@ -14,12 +14,29 @@ interface CreepMemory {
   path?: string;
   task?: TaskData;
   phasingOut?: boolean;
+  parked?: boolean;         // Whether the creep is parked in a static position
+  containerPos?: {          // Position of a container or link this creep is associated with
+    x: number;
+    y: number;
+    roomName: string;
+  };
+  prioritizeUpgrade?: boolean; // Whether this upgrader should prioritize upgrading over other tasks
 
   // Multi-room properties
   homeRoom?: string;        // The room this creep was spawned in or is assigned to
   targetRoom?: string;      // The room this creep should work in (may be different from homeRoom)
   assignment?: string;      // Special assignment for this creep (e.g., 'reserve', 'remote_harvest')
   stage?: number;           // Creep's current task sequence stage
+  
+  // Strategy pattern properties
+  strategy?: string;        // Strategy used by this creep (for BaseCreep architecture)
+  idle?: boolean;           // Whether the creep is currently idle
+  
+  // Defender strategy properties
+  patrolTarget?: { x: number; y: number; roomName: string }; // Target position for defender patrols
+  
+  // Scout strategy properties
+  visitedPOI?: number; // Number of points of interest visited in current room
 }
 
 interface RoomMemory {
@@ -58,6 +75,7 @@ interface RoomMemory {
   buildFlags?: any;
   buildState?: any;
   initialized?: boolean;
+  upgradeFocus?: boolean; // Whether this room is focusing on controller upgrading
   energy?: {
     available?: number;
     capacity?: number;
@@ -72,6 +90,7 @@ interface RoomMemory {
   idleTicks?: { [role: string]: number };
   extensionFillStats?: { full: number; empty: number; ticks: number };
   mapping?: any;
+  lastEmergencySpawnTick?: number;
 }
 
 // For scouted rooms, use a dedicated type
@@ -118,12 +137,17 @@ interface Memory {
       lastSeen: number;
       rcl?: number;
       sources?: { id: Id<Source>, pos: RoomPosition }[];
+      sourceCount?: number;            // Count of sources in room (for scouts)
       minerals?: { id: Id<Mineral>, pos: RoomPosition, mineralType: MineralConstant }[];
       hostileTime?: number;
       hostileCount?: number;
+      hostiles?: number;               // Number of hostile creeps
+      hostileOwners?: string[];        // List of usernames of hostile creeps
       hostileStructures?: number;
       expansionScore?: number;
       owner?: string;
+      mineralType?: MineralConstant;   // Type of mineral in the room
+      controllerLevel?: number;        // Level of the controller
     }
   };
   

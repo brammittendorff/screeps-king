@@ -2,6 +2,7 @@
 
 export class RoomCache {
   private static cache: { [roomName: string]: { [findType: number]: { tick: number, result: any[] } } } = {};
+  private static lastCleanup = 0;
 
   /**
    * Get cached result for a room.find(FIND_*) call, or perform and cache it if not present for this tick.
@@ -26,6 +27,22 @@ export class RoomCache {
    */
   public static clear(): void {
     this.cache = {};
+  }
+  
+  /**
+   * Clean up stale cache entries (call periodically)
+   */
+  public static cleanup(): void {
+    // Only run every 100 ticks
+    if (Game.time - this.lastCleanup < 100) return;
+    this.lastCleanup = Game.time;
+    
+    // Remove cache entries for rooms we no longer have visibility into
+    for (const roomName in this.cache) {
+      if (!Game.rooms[roomName]) {
+        delete this.cache[roomName];
+      }
+    }
   }
 }
 

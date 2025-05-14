@@ -17,6 +17,18 @@ export class StructureManager {
   private static towerActions: WeakMap<StructureTower, string> = new WeakMap();
 
   /**
+   * Run the structure manager for the current tick
+   */
+  public static run(): void {
+    this.runStructures();
+    
+    // Every 100 ticks, clean up memory for removed structures
+    if (Game.time % 100 === 0) {
+      this.cleanup();
+    }
+  }
+
+  /**
    * Run structure operations for all structures
    */
   public static runStructures(): void {
@@ -130,14 +142,14 @@ export class StructureManager {
           room: container.room.name,
           role,
           lastTick: Game.time,
-          fill: container.store[RESOURCE_ENERGY] || 0,
-          capacity: container.store.getCapacity(RESOURCE_ENERGY)
+          fill: 'store' in container ? container.store[RESOURCE_ENERGY] || 0 : 0,
+          capacity: 'store' in container ? container.store.getCapacity(RESOURCE_ENERGY) : 0
         };
         // Flag for pickup/refill
         if (!container.room.memory.containerFlags) container.room.memory.containerFlags = {};
-        if (role === 'harvest' && container.store.getFreeCapacity(RESOURCE_ENERGY) < 100) {
+        if (role === 'harvest' && 'store' in container && container.store.getFreeCapacity(RESOURCE_ENERGY) < 100) {
           container.room.memory.containerFlags[id] = 'pickup';
-        } else if (role === 'upgrade' && container.store[RESOURCE_ENERGY] < 200) {
+        } else if (role === 'upgrade' && 'store' in container && container.store[RESOURCE_ENERGY] < 200) {
           container.room.memory.containerFlags[id] = 'refill';
         } else {
           container.room.memory.containerFlags[id] = undefined;
@@ -168,7 +180,7 @@ export class StructureManager {
           room: link.room.name,
           role,
           lastTick: Game.time,
-          energy: link.store[RESOURCE_ENERGY] || 0,
+          energy: 'store' in link ? link.store[RESOURCE_ENERGY] || 0 : 0,
           cooldown: link.cooldown
         };
       }
@@ -179,7 +191,7 @@ export class StructureManager {
     const controllers = links.filter(l => Memory.links[l.id].role === 'controller');
     const relays = links.filter(l => Memory.links[l.id].role === 'relay');
     for (const source of sources) {
-      if (source.cooldown === 0 && source.store[RESOURCE_ENERGY] > 0) {
+      if (source.cooldown === 0 && 'store' in source && source.store[RESOURCE_ENERGY] > 0) {
         // Prefer storage, then controller, then relay
         let target: StructureLink | undefined = storages.find(l => l.room.name === source.room.name && l.id !== source.id && l.cooldown === 0);
         if (!target) target = controllers.find(l => l.room.name === source.room.name && l.id !== source.id && l.cooldown === 0);
@@ -193,7 +205,7 @@ export class StructureManager {
     }
     // Relay links: transfer to storage/controller if full
     for (const relay of relays) {
-      if (relay.cooldown === 0 && relay.store[RESOURCE_ENERGY] > 0) {
+      if (relay.cooldown === 0 && 'store' in relay && relay.store[RESOURCE_ENERGY] > 0) {
         let target: StructureLink | undefined = storages.find(l => l.room.name === relay.room.name && l.id !== relay.id && l.cooldown === 0);
         if (!target) target = controllers.find(l => l.room.name === relay.room.name && l.id !== relay.id && l.cooldown === 0);
         if (target) {

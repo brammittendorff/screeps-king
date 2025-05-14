@@ -4,13 +4,13 @@
  * This module has been refactored to be more maintainable
  */
 
-import { Logger } from '../utils/logger';
-import { Helpers } from '../utils/helpers';
-import { ScoutHelper } from '../utils/scout-helper';
+import { Logger } from '../../utils/logger';
+import { Helpers } from '../../utils/helpers';
+import { ScoutHelper } from '../../utils/scout-helper';
 import * as _ from 'lodash';
-import { AI } from '../roles';
-import { RoomCache } from '../utils/room-cache';
-import { UpgradeStrategyManager } from './upgrade-strategy';
+import { AI } from '../../roles';
+import { RoomCache } from '../../utils/room-cache';
+import { UpgradeStrategyManager } from '../upgrade-strategy';
 
 // Import refactored modules
 import { CreepRole, RoomProfile, EmpireProfile } from './creep-types';

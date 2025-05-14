@@ -1,501 +1,58 @@
-# Screeps King - Advanced TypeScript Edition
+# Screeps King Bot
 
-This is an advanced implementation of Screeps AI with TypeScript support, using best practices and optimized performance. The system features a sophisticated multi-room colony management system with expansion capabilities, advanced logging, and resource sharing between rooms.
-
-## 🚀 Latest Features
-
-- **Robust Memory Management:**
-  - Aggressive cleanup of orphaned and legacy memory entries
-  - Defensive, type-safe access to all memory structures
-  - Creep memory versioning and auto-upgrade on deploy
-- **Professional Task System:**
-  - Batched, on-demand room tasks for routine jobs (no memory bloat)
-  - All tasks (including special/remote) are logged in detail every 100 ticks
-  - TaskManager aggressively prunes old/invalid tasks
-- **Advanced Build Planning:**
-  - Containers are optimally placed (non-swamp, near roads, not blocked)
-  - Redundant containers for high-traffic sources (auto-detected)
-  - Automatic rebuild if a container is destroyed
-  - Tagging of build queue entries for clarity (e.g., 'source container', 'controller container')
-- **Energy Delivery Prioritization:**
-  - Harvesters and haulers always fill spawns before extensions, maximizing spawn uptime
-- **Detailed Stats & Logging:**
-  - Per-tick heartbeat log with tick number, GCL, creeps, CPU, memory, and countdown to next stats
-  - Every 100 ticks: full stats, build queue, construction sites, and all active tasks (with type, target, assigned creeps, priority, age)
-- **Professional Error Handling:**
-  - All manager calls are wrapped in try/catch with error logging
-  - Defensive checks for corrupted or missing memory
-- **Remote & Expansion Logic:**
-  - Remote sources get containers with the same advanced logic
-  - Expansion targets are scored and prioritized
+A professional, robust, and highly modular Screeps AI designed to scale optimally from RCL 1 to 8, with advanced recovery, mapping, and management features.
 
 ## Features
+- **Modular architecture**: Clear separation of roles, management, planning, and utilities.
+- **Room mapping & planning**: Automated mapping of sources, controller, and optimal structure/road placement.
+- **Dynamic creep management**: All core and remote roles scale based on real-time mapping and room needs.
+- **Advanced recovery**: Emergency logic for controller downgrade, energy starvation, construction stalling, and more.
+- **Even distribution**: Harvesters, haulers, and remote creeps are evenly and optimally assigned.
+- **Configurable thresholds**: All critical thresholds are easily tunable in configuration files.
+- **Automated defense**: Defenders and tower supply ramp up automatically if hostiles are detected.
+- **Detailed logging**: All critical events are logged and notified via `Game.notify`.
+- **Type safety**: All new memory fields are type-safe and included in TypeScript definitions.
 
-- Fully TypeScript implementation with type definitions
-- Modular architecture with separated concerns
-- Multi-room colony management (up to 4 rooms)
-- Automatic room expansion and remote harvesting
-- State machine-based creep behaviors
-- Efficient memory management and caching
-- Advanced logging with color-coded console output
-- CPU profiling and optimization
-- Priority-based spawning system
-- Automatic room planning and construction
-- Room defense and hostile detection
-- Advanced defense: automatic safe mode, boosted enemy detection, nuke detection
-- In-game visual overlays for emergencies, nukes, and threat levels
-- Analytics: hostile activity logs, nuke warnings, and more
-- Statistics visualization and monitoring
-- Remote mining and resource sharing between rooms
-- Market analytics: real-time mineral price tracking and trend analysis
-- **Automated Structure Cleanup:** The system automatically detects and removes all non-owned hostile or neutral structures (except roads, containers, ramparts, walls, and controllers) by spawning destroyer creeps. This keeps your rooms clear of abandoned or enemy structures without manual intervention.
-
-## Installation
-
-Install all npm packages:
-
+## Directory Structure
 ```
-npm install
+src/
+  roles/           # All creep role logic
+  management/      # Creep, room, and resource management
+  planners/        # Room mapping and structure/road planning
+  utils/           # Shared utilities
+  control/         # Main game loop and control logic
+  configuration/   # Configurable thresholds and tuning
+  @types/          # TypeScript type definitions
 ```
 
-## Configuration
-
-1. Copy the `.env.example` file to `.env`:
-
-```
-cp .env.example .env
-```
-
-2. Edit the `.env` file and set your authentication:
-
-```
-# For token authentication (recommended)
-SCREEPS_TOKEN=your_auth_token
-
-# For username/password authentication (private servers)
-SCREEPS_USERNAME=your_username
-SCREEPS_PASSWORD=your_password
-```
-
-You can get your auth token from the [Screeps account page](https://screeps.com/a/#!/account).
-
-### Additional Configuration Options
-
-You can customize other deployment settings in your `.env` file:
-
-```
-SCREEPS_BRANCH=main          # The branch to deploy to
-SCREEPS_HOST=screeps.com     # The server hostname
-SCREEPS_PORT=443             # The server port
-SCREEPS_PROTOCOL=https       # The server protocol
-SCREEPS_SHARD=shard3         # The shard to deploy to
-```
-
-### GitLab CI/CD
-
-This project includes GitLab CI/CD configuration. To use it, set up the following environment variables in your GitLab project settings:
-
-- `SCREEPS_TOKEN` - Your Screeps authentication token
-
-## Build and Deploy
-
-### Build and Deploy Commands
-
-Build the code:
-```
-npm run build
-```
-
-Watch for code changes:
-```
-npm run watch
-```
-
-Deploy to Screeps server:
-```
-npm run deploy
-```
-
-Deploy to the simulator:
-```
-npm run deploy:sim
-```
-
-View logs:
-```
-npm run logs              # All logs
-npm run logs:error        # Error logs
-npm run logs:modules      # Module logs
-npm run logs:controllers  # Controller logs
-```
-
-Deploy and watch logs:
-```
-npm run deploy:watch
-```
-
-## Project Structure
-- `src/` - TypeScript source code
-  - `ai/` - AI behaviors for different creep roles
-    - `harvester.ts` - Harvester creep logic
-    - `upgrader.ts` - Upgrader creep logic
-    - `builder.ts` - Builder creep logic
-    - `claimer.ts` - Room claiming logic
-    - `tower.ts` - Tower defense logic
-    - `destroyer.ts` - Structure destruction/attack logic
-    - `defender.ts` - Room defense/defender logic
-  - `config/` - Game settings and constants
-    - `constants.ts` - Game constants
-    - `index.ts` - Config entry point
-  - `managers/` - Manager classes for different game systems
-    - `colony-manager.ts` - Multi-room colony coordination
-    - `creep-manager.ts` - Creep spawning and assignment
-    - `memory-manager.ts` - Memory management and cleanup
-    - `room-manager.ts` - Room-level operations
-    - `structure-manager.ts` - Structure management
-    - `task-manager.ts` - Task assignment system
-  - `types/` - TypeScript type definitions
-    - `memory.d.ts` - Memory structure definitions
-    - `global.d.ts` - Global object declarations
-    - `room.d.ts` - Room type extensions
-    - `screeps-extended.d.ts` - Extended Screeps types
-  - `utils/` - Utility classes
-    - `logger.ts` - Advanced colored logging system
-    - `profiler.ts` - (Deprecated) CPU usage profiling (see README note)
-    - `stats-display.ts` - Game statistics visualization
-    - `scout-helper.ts` - Room scouting utilities
-    - `helpers.ts` - General helper functions
-    - `market-trends.ts` - Market analytics and mineral price tracking
-  - `main.ts` - Main game loop
-
-## Architecture
-
-The TypeScript codebase follows these design patterns:
-
-1. **Manager System**
-   - Each manager handles a specific domain (creeps, rooms, colony, etc.)
-   - Managers provide a centralized interface for operations
-   - Static classes with clear responsibilities and interfaces
-
-2. **State Machine Pattern**
-   - Creeps use state machines to manage behavior
-   - States like harvesting, building, upgrading are well-defined
-   - Clean transitions between states with appropriate context
-
-3. **Role-Based Behaviors**
-   - Different creep roles (harvester, upgrader, builder, etc.) have specialized behaviors
-   - Each role is implemented as a class with standard interfaces
-   - Roles can be assigned to different rooms including remote operations
-
-4. **Priority-Based Spawning**
-   - Creeps are spawned based on priority and room needs
-   - Dynamic body composition based on available energy
-   - Queue system for managing spawn requests
-
-5. **Memory Management**
-   - Efficient memory usage with cleanup routines
-   - Type-safe memory access with TypeScript interfaces
-   - Defensive programming to prevent undefined errors
-
-## Multi-Room Colony Management
-
-The system is designed to manage a colony of up to 4 rooms with coordination between them. The colony management features include:
-
-### Room Types and Management
-
-- **Owned Rooms**: Full control with spawns and structures
-- **Reserved Rooms**: Controller reserved for remote harvesting
-- **Scouted Rooms**: Explored rooms for potential expansion
-- **Neutral Rooms**: Unexplored rooms that may contain valuable resources
-
-### Automatic Room Expansion
-
-The colony will automatically expand to new rooms when:
-
-1. Your Global Control Level (GCL) is higher than your current room count
-2. You have sufficient energy resources (20k+ in storage)
-3. A suitable target room has been identified
-
-The expansion process includes:
-
-1. **Scouting**: Scout creeps explore neighboring rooms
-2. **Evaluation**: Rooms are scored based on sources, minerals, and terrain
-3. **Claiming**: Claimer creeps are sent to claim promising rooms
-4. **Building**: Initial structures (spawn, extensions) are placed
-5. **Development**: The room is developed using the same patterns as established rooms
-
-### Remote Harvesting
-
-For rooms that aren't claimed but have valuable resources:
-
-1. **Reservation**: Reserver creeps maintain controller reservation
-2. **Remote Harvesters**: Dedicated creeps harvest resources
-3. **Haulers**: Transport resources back to owned rooms
-4. **Infrastructure**: Containers are built near sources for efficiency
-
-### Resource Sharing
-
-Resources are balanced between rooms in your colony:
-
-1. **Energy Distribution**: Surplus energy from established rooms helps newer rooms
-2. **Terminal Network**: Rooms with terminals automatically share resources
-3. **Resource Balancing**: The Colony Manager ensures resources are distributed optimally
-
-### Room Defense
-
-The system includes defensive capabilities:
-
-1. **Hostile Detection**: Automatically detects enemy creeps
-2. **Tower Management**: Coordinates tower actions for defense
-3. **Safe Mode**: Activates safe mode when critical structures are threatened
-
-## Advanced Defense, Analytics, and Visuals
-
-### Automatic Safe Mode
-If a critical structure (spawn, storage, controller) is under attack and safe mode is available, it will be triggered automatically. This helps prevent catastrophic losses during heavy attacks or nuke landings.
-
-### Boosted Enemy Detection
-The system detects hostile creeps with boosted body parts. If boosted enemies are present, the AI will:
-- Increase the number of defenders spawned
-- Prioritize towers to attack boosted or high-damage hostiles
-- Mark the room as in emergency
-
-### Nuke Detection & Response
-- Incoming nukes are detected, logged, and notified (with ETA and impact position)
-- Room memory tracks nuke emergencies and impact sites
-- (Optional) Visual overlays can show nuke impact locations and ETA if enabled in your code
-- (Optionally) Prioritize rampart/wall repairs at nuke impact sites
-
-### Analytics
-- Hostile activity is logged in memory (`hostileLog`)
-- Recent deaths can be tracked (`recentDeaths`)
-- Nuke info is stored in memory (`nukeInfo`)
-- **Per-tick damage stats**: Damage dealt and received is tracked in memory (`damageLog`) and can be shown in overlays if enabled
-- These analytics can be used for in-game stats, debugging, or further automation
-
-### Visual Overlays (Optional)
-If enabled in your code, in-game overlays (using RoomVisual) can display:
-- Emergency status ("EMERGENCY", "SAFE MODE", "NUKE INCOMING")
-- Nuke impact sites and ETA
-- Hostile and defender counts
-- **Per-tick damage stats** (average damage dealt/received over last 10 ticks)
-
-You can extend these overlays or analytics for your own needs. For example, add per-tick damage stats, creep path overlays, or custom visual themes.
-
-### Profiler (Deprecated)
-The original `profiler.ts` for CPU usage profiling has been removed. For modern profiling, use Screeps' built-in CPU tools or third-party profilers as needed.
-
-## Console Commands
-
-The game provides several console commands to control and monitor your colony:
-
-### Statistics and Information
-
-- `stats()` - Display colony statistics once
-- `stats(true)` - Enable automatic statistics display (every 10 ticks)
-- `stats(false)` - Disable automatic statistics display
-
-### Logging
-
-- `setLogLevel('DEBUG')` - Set log level to DEBUG (most verbose)
-- `setLogLevel('INFO')` - Set log level to INFO (standard information)
-- `setLogLevel('WARNING')` - Set log level to WARNING (only warnings and errors)
-- `setLogLevel('ERROR')` - Set log level to ERROR (only errors)
-
-### Memory Management
-
-- `Memory.colony.expansionTargets.push('W2N3')` - Add a room to expansion targets
-- `delete Memory.creeps[creepName]` - Delete a creep's memory
-
-### Manual Room Expansion
-
-If you want to manually control room expansion:
-
-1. Add a room to expansion targets:
-```javascript
-// Replace W2N3 with your target room name
-if (!Memory.colony.expansionTargets) Memory.colony.expansionTargets = [];
-Memory.colony.expansionTargets.push('W2N3');
-```
-
-2. Spawn a claimer manually:
-```javascript
-// Replace roomName with your source room
-// Replace targetRoomName with the room to claim
-Game.rooms['roomName'].memory.spawnQueue = Game.rooms['roomName'].memory.spawnQueue || [];
-Game.rooms['roomName'].memory.spawnQueue.push({
-  role: 'claimer',
-  body: [CLAIM, MOVE, MOVE, MOVE],
-  memory: {
-    role: 'claimer',
-    homeRoom: 'roomName',
-    targetRoom: 'targetRoomName'
-  },
-  priority: 90
-});
-```
-
-3. Send builders to help bootstrap the new room:
-```javascript
-// Replace roomName with your source room
-// Replace newRoomName with the newly claimed room
-Game.rooms['roomName'].memory.spawnQueue = Game.rooms['roomName'].memory.spawnQueue || [];
-Game.rooms['roomName'].memory.spawnQueue.push({
-  role: 'builder',
-  body: [WORK, WORK, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE],
-  memory: {
-    role: 'builder',
-    homeRoom: 'roomName',
-    targetRoom: 'newRoomName'
-  },
-  priority: 60
-});
-```
-
-## Linting
-
-Lint your code with:
-
-```
-npm run lint      # JavaScript
-npm run lint:ts   # TypeScript
-```
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Cannot read property of undefined**
-   - This is usually due to missing memory initialization
-   - Look for defensive coding patterns in our code (global.go.resource checks)
-   - Fix with proper memory initialization in MemoryManager
-
-2. **Creeps not spawning**
-   - Check if energy is sufficient for the requested creep body
-   - Verify spawn queue is properly initialized
-   - Look at creep priorities - higher priority creeps might be blocking others
-
-3. **Remote creeps not working correctly**
-   - Ensure proper room names in homeRoom and targetRoom memory
-   - Check pathfinding for obstacles or walls
-   - Verify that the creep has the necessary body parts for its role
-
-### Debugging Tips
-
-1. Enable debug logging to see detailed messages:
-```javascript
-setLogLevel('DEBUG');
-```
-
-2. View colony statistics to monitor resource levels:
-```javascript
-stats();
-```
-
-3. Check memory structure for errors:
-```javascript
-// View specific memory sections
-console.log(JSON.stringify(Memory.colony, null, 2));
-```
+## Quickstart
+1. **Clone the repo** and install dependencies (if using TypeScript, run `npm install`).
+2. **Configure thresholds** in `src/configuration/` as needed for your playstyle.
+3. **Upload to Screeps** (official or private server).
+4. **Monitor logs and notifications** for critical events and tuning suggestions.
+
+## Advanced Features
+- **RoomPlanner**: Maps all sources, controller, and plans optimal structure/road placement. Stores walkable spots for optimal creep assignment.
+- **CreepManager**: Dynamically scales all roles, evenly distributes harvesters/haulers, and adapts to emergencies.
+- **Resilience**: Handles controller downgrade, energy starvation, construction stalling, and spawn blockage with adaptive logic.
+- **Remote Mining**: Robust assignment and recovery for remote harvesters/haulers.
+- **Idle Management**: Recycles or parks idle creeps to optimize CPU and energy.
+- **Market Automation**: Auto-sells excess energy if storage is full.
+
+## Configuration & Tuning
+- All thresholds (e.g., construction stalling, controller downgrade, energy starvation) are configurable in `src/configuration/`.
+- Emergency and scaling logic can be tuned for aggressive or conservative playstyles.
+
+## Extending the Bot
+- Add new roles in `src/roles/` and register them in the AI system.
+- Extend mapping/planning logic in `src/planners/` for new structure types or layouts.
+- Add new management features in `src/management/` as needed.
+
+## Best Practices
+- Keep roles and management logic modular and well-documented.
+- Use type-safe memory fields and update type definitions in `@types/`.
+- Monitor logs and notifications for tuning opportunities.
+- Regularly review and tune configuration for optimal performance.
 
 ## License
-
-MIT License
-
-## Automated Structure Cleanup
-
-When a non-owned hostile or neutral structure (other than roads, containers, ramparts, walls, or controllers) is detected in your room, the system will automatically request a destroyer creep. The destroyer will:
-- Seek out and attack the closest non-owned spawn first.
-- If no spawns are present, attack other non-owned structures.
-- Idle near the controller if nothing is left to destroy.
-
-This ensures your rooms remain free of abandoned or enemy structures, improving security and efficiency.
-
-### AI Roles
-
-- **Destroyer:** Automatically spawned when any non-owned hostile or neutral structure is detected in your room. The destroyer will seek out and attack these structures (spawns, extensions, towers, terminals, labs, links, factories, etc.), prioritizing spawns first, then other structures, and will idle if nothing is left to destroy. The destroyer will not target roads, containers, ramparts, walls, or controllers.
-
-# Screeps-King Bot: Room Level (RCL) Progression & Setup
-
-## Overview
-This bot is designed for robust, professional Screeps empire management. It adapts its strategy and creep composition as your rooms progress from RCL 1 to RCL 8.
-
----
-
-## Main Loop & Planning
-- **Every tick:**
-  - For each owned room:
-    - Build a profile of the room's state (energy, creeps, construction, etc.)
-    - Plan what creeps are needed (harvesters, upgraders, builders, etc.)
-    - Request those creeps (add to spawn queue)
-  - Process the spawn queue (spawn creeps as soon as possible)
-- **Creep roles are managed independently** (harvesters, upgraders, builders, haulers, etc.)
-- **Builders and upgraders are always present when needed**
-
----
-
-## RCL 1–8: Creep & Strategy Breakdown
-
-### **RCL 1**
-- **Harvesters:** Up to 2 per source (max 4 for 2 sources)
-- **Upgraders:** Always at least 1
-- **Builders:** 1 if there are construction sites
-- **No haulers** (harvesters deliver energy directly)
-- **Goal:** Rapidly level up, keep controller safe, build essential structures
-
-### **RCL 2**
-- **Harvesters:** Up to 2 per source (max 4)
-- **Upgraders:** Always at least 1
-- **Builders:** 1 if there are construction sites
-- **No haulers**
-- **Goal:** Continue fast leveling, start building extensions and roads
-
-### **RCL 3**
-- **Harvesters:** 1 per source (max 2)
-- **Upgraders:** 1 (more if storage energy is high)
-- **Builders:** Up to 2 (scales with construction sites)
-- **Haulers:** May start to appear if storage/containers exist
-- **Goal:** Build towers, storage, and more extensions
-
-### **RCL 4**
-- **Harvesters:** 1 per source (max 2)
-- **Upgraders:** 1–2 (scales with storage energy)
-- **Builders:** Up to 2
-- **Haulers:** 1 per source (if storage exists)
-- **Goal:** Automate energy logistics, build advanced structures
-
-### **RCL 5–6**
-- **Harvesters:** 1 per source (max 2)
-- **Upgraders:** 1–3 (scales with storage energy)
-- **Builders:** Up to 2
-- **Haulers:** 1 per source
-- **Specialists:** Defenders, remote miners, reservers as needed
-- **Goal:** Expand, defend, optimize logistics
-
-### **RCL 7–8**
-- **Harvesters:** 1 per source (max 2)
-- **Upgraders:** Up to 5 (if storage energy is abundant)
-- **Builders:** Up to 2
-- **Haulers:** 1 per source
-- **Specialists:** More advanced roles (labs, power, empire-wide logistics)
-- **Goal:** Maximize GCL, empire expansion, and late-game infrastructure
-
----
-
-## Setup & Best Practices
-- **Every tick:**
-  - Plan creeps for each room
-  - Request creeps
-  - Process spawn queue
-- **Creep roles are assigned and managed independently**
-- **Builders only spawned if there are construction sites**
-- **Upgraders always present (never blocked by harvester logic)**
-- **Harvesters are capped per source to avoid crowding**
-- **Haulers appear when storage/containers are present**
-- **Empire-level logic (expansion, defense, remote mining) is layered on top**
-
----
-
-## Customization
-- You can tune the number of upgraders, builders, or haulers by editing `planCreeps` in `src/managers/creep-manager.ts`.
-- Advanced features (remote mining, empire defense, etc.) can be added modularly.
+MIT

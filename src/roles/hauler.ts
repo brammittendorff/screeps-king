@@ -1,150 +1,32 @@
 /**
  * Hauler AI
- * Handles energy collection and delivery for maximum speed and synergy
- * Now task-driven: will use TaskManager for all transfer/withdraw/pickup tasks, falling back to legacy logic if no task is available.
+ * Handles energy collection and delivery
+ * Refactored to use BaseCreep architecture
  */
 
-import { Logger } from '../utils/logger';
-import * as _ from 'lodash';
-import { TaskManager } from '../management/task-manager';
-import { RoomCache } from '../utils/room-cache';
-import { RoomTaskManager } from '../management/room-task-manager';
-import { CreepActionGuard } from '../utils/helpers';
+import { BaseCreepAI } from './base-creep';
+import { HaulerStrategy } from './strategies/hauler-strategy';
+
+// Create a singleton instance of the strategy
+const strategy = new HaulerStrategy();
 
 export class HaulerAI {
   /**
    * Main task method for hauler creeps
    */
   public static task(creep: Creep): void {
-    // --- Action pipeline guard: only one pipeline action per tick (Screeps rule) ---
-    CreepActionGuard.reset(creep);
-    // Use TaskManager only for special/remote tasks
-    const task = TaskManager.findTaskForCreep(creep);
-    if (task) {
-      TaskManager.executeTask(creep, task);
-      return;
+    // Map old working memory to new state if needed
+    if (creep.memory.working !== undefined && creep.memory.state === undefined) {
+      creep.memory.state = creep.memory.working ? 'working' : 'harvesting';
     }
-    // --- Batched, on-demand room tasks ---
-    const roomTasks = RoomTaskManager.getTasks(creep.room);
-    // State: working = delivering, !working = collecting
-    if (creep.memory.working && creep.store.getUsedCapacity(RESOURCE_ENERGY) === 0) {
-      creep.memory.working = false;
-      creep.say('🔄 collect');
-    }
-    if (!creep.memory.working && creep.store.getFreeCapacity() === 0) {
-      creep.memory.working = true;
-      creep.say('⚡ deliver');
-    }
-    if (creep.memory.working === undefined) {
-      creep.memory.working = creep.store.getUsedCapacity() > 0;
-    }
-
-    if (creep.memory.working) {
-      // DELIVERING
-      // Use batched refill targets
-      const refillTargets = roomTasks.refill
-        .map(id => Game.getObjectById(id))
-        .filter((s): s is Structure => !!s)
-        .sort((a, b) => {
-          // Priority: spawn < extension < tower
-          const priority = (s: Structure) =>
-            s.structureType === STRUCTURE_SPAWN ? 0 :
-            s.structureType === STRUCTURE_EXTENSION ? 1 :
-            s.structureType === STRUCTURE_TOWER ? 2 : 3;
-          return priority(a) - priority(b);
-        });
-      if (refillTargets.length > 0) {
-        const target = creep.pos.findClosestByPath(refillTargets);
-        if (target) {
-          // Only one pipeline action per tick (Screeps rule)
-          if (CreepActionGuard.allow(creep, 'transfer')) {
-            if (creep.transfer(target, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
-              creep.moveTo(target, { reusePath: 10 });
-            }
-          }
-          return;
-        }
-      }
-      // Idle at storage or spawn
-      const idlePos = (creep.room.storage && creep.room.storage.pos) || (creep.room.find(FIND_MY_SPAWNS)[0]?.pos) || new RoomPosition(25, 25, creep.room.name);
-      creep.moveTo(idlePos, { reusePath: 20 });
-      creep.say('❓ idle');
-      return;
-    } else {
-      // COLLECTING
-      // Use mapping for optimal collection
-      const mapping = creep.room.memory.mapping;
-      if (!creep.memory.working && mapping && mapping.sources && mapping.sources.length > 0 && mapping.storage) {
-        // Prefer containers at sources or storage
-        let containers: (StructureContainer | StructureStorage)[] = [];
-        for (const source of mapping.sources) {
-          const found = creep.room.lookForAt(LOOK_STRUCTURES, source.x, source.y)
-            .filter(s => s.structureType === STRUCTURE_CONTAINER && (s as StructureContainer).store.getUsedCapacity(RESOURCE_ENERGY) > 0);
-          containers = containers.concat(found as (StructureContainer | StructureStorage)[]);
-        }
-        if (mapping.storage) {
-          const storageObj = Game.getObjectById(mapping.storage.id as Id<StructureStorage>);
-          if (storageObj && storageObj.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
-            containers.push(storageObj as StructureStorage);
-          }
-        }
-        containers = _.sortBy(containers, s => -((s as StructureContainer | StructureStorage).store[RESOURCE_ENERGY]));
-        if (containers.length > 0) {
-          if (CreepActionGuard.allow(creep, 'withdraw')) {
-            if (creep.withdraw(containers[0], RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
-              creep.moveTo(containers[0], { reusePath: 10 });
-            }
-          }
-          return;
-        }
-      }
-      // Use batched pickup targets
-      const pickupTargets = roomTasks.pickup
-        .map(id => Game.getObjectById(id))
-        .filter((r): r is Resource => !!r);
-      if (pickupTargets.length > 0) {
-        const target = creep.pos.findClosestByPath(pickupTargets);
-        if (target) {
-          // Only one pipeline action per tick (Screeps rule)
-          if (CreepActionGuard.allow(creep, 'pickup')) {
-            if (creep.pickup(target) === ERR_NOT_IN_RANGE) {
-              creep.moveTo(target, { reusePath: 10 });
-            }
-          }
-          return;
-        }
-      }
-      // 2. Containers/storage with energy
-      let sources = RoomCache.get(creep.room, FIND_STRUCTURES, {
-        filter: (s: AnyStructure) =>
-          (s.structureType === STRUCTURE_CONTAINER || s.structureType === STRUCTURE_STORAGE) &&
-          s.store.getUsedCapacity(RESOURCE_ENERGY) > 0
-      }) as (StructureContainer | StructureStorage)[];
-      sources = _.sortBy(sources, s => -s.store[RESOURCE_ENERGY]);
-      if (sources.length > 0) {
-        // Only one pipeline action per tick (Screeps rule)
-        if (CreepActionGuard.allow(creep, 'withdraw')) {
-          if (creep.withdraw(sources[0], RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
-            creep.moveTo(sources[0], { reusePath: 10 });
-          }
-        }
-        return;
-      }
-      // 3. Fallback: harvest from source (if no containers/storage)
-      const sourcesRaw = RoomCache.get(creep.room, FIND_SOURCES_ACTIVE);
-      if (sourcesRaw.length > 0) {
-        // Only one pipeline action per tick (Screeps rule)
-        if (CreepActionGuard.allow(creep, 'harvest')) {
-          if (creep.harvest(sourcesRaw[0]) === ERR_NOT_IN_RANGE) {
-            creep.moveTo(sourcesRaw[0], { reusePath: 10 });
-          }
-        }
-        return;
-      }
-      // Idle at storage or spawn
-      const idlePos = (creep.room.storage && creep.room.storage.pos) || (creep.room.find(FIND_MY_SPAWNS)[0]?.pos) || new RoomPosition(25, 25, creep.room.name);
-      creep.moveTo(idlePos, { reusePath: 20 });
-      creep.say('❓ idle');
-    }
+    
+    BaseCreepAI.task(creep, strategy);
   }
-} 
+  
+  /**
+   * Get optimal body for this role
+   */
+  public static getOptimalBody(energy: number, rcl: number): BodyPartConstant[] {
+    return strategy.getBodyParts(energy, rcl);
+  }
+}

@@ -48,14 +48,19 @@ export class Logger {
    * Log an error message
    */
   public static error(message: string, context?: string): void {
-    // No-op: logging removed
+    // Always log errors regardless of level
+    const contextStr = context ? `[${context}]` : '';
+    console.log(`<span style="color:${this.colors.ERROR}">[ERROR]${contextStr} ${message}</span>`);
   }
 
   /**
    * Log a warning message
    */
   public static warn(message: string, context?: string): void {
-    // No-op: logging removed
+    if (this.level >= LogLevel.WARNING) {
+      const contextStr = context ? `[${context}]` : '';
+      console.log(`<span style="color:${this.colors.WARN}">[WARN]${contextStr} ${message}</span>`);
+    }
   }
 
   /**
@@ -129,5 +134,18 @@ export class Logger {
 
       this.setLevel(newLevel);
     };
+  }
+
+  public static warning(message: string) {
+    this.info('[WARNING] ' + message);
+  }
+  
+  /**
+   * Log a critical error message
+   */
+  public static critical(message: string, context?: string): void {
+    // Always log critical errors regardless of level
+    const contextStr = context ? `[${context}]` : '';
+    console.log(`<span style="color:${this.colors.ERROR};font-weight:bold">[CRITICAL]${contextStr} ${message}</span>`);
   }
 }

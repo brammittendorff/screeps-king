@@ -7,6 +7,19 @@ import { Logger } from './logger';
 import * as _ from 'lodash';
 
 export class StatsDisplay {
+  private static lastRun = 0;
+  
+  /**
+   * Run the stats display if needed
+   */
+  public static run(): void {
+    // Only run every 100 ticks
+    if (Game.time - this.lastRun < 100) return;
+    this.lastRun = Game.time;
+    
+    this.showStats();
+  }
+  
   /**
    * Display colony statistics
    */

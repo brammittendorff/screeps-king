@@ -19,6 +19,26 @@ export class MemoryManager {
   }
   
   /**
+   * Run memory operations for the current tick
+   */
+  public static run(): void {
+    // Run every tick
+    this.cleanup();
+    this.updateAllCreepMemory();
+    
+    // Run less frequently
+    if (Game.time % 10 === 0) {
+      // Update room memory every 10 ticks
+      for (const roomName in Game.rooms) {
+        const room = Game.rooms[roomName];
+        if (room.controller && room.controller.my) {
+          this.updateRoomMemory(room);
+        }
+      }
+    }
+  }
+  
+  /**
    * Clean up unused memory entries
    */
   public static cleanup(): void {
@@ -80,26 +100,24 @@ export class MemoryManager {
    * Initialize memory for a creep
    */
   public static initCreepMemory(creep: Creep, role: string): void {
-    if (!creep.memory.version || creep.memory.version < global.config.version) {
-      creep.memory.version = global.config.version;
-      creep.memory.role = role;
-      
-      // Initialize based on role
-      switch (role) {
-        case 'harvester':
-          creep.memory.activity = 'harvesting';
-          creep.memory.initiated = false;
-          break;
-        case 'upgrader':
-          creep.memory.working = false;
-          break;
-        case 'builder':
-          creep.memory.working = false;
-          break;
-        case 'archer':
-          // Specific archer initialization
-          break;
-      }
+    // Only set or update your own fields; do NOT delete or overwrite the whole memory object!
+    creep.memory.version = global.config.version;
+    creep.memory.role = role;
+    // Initialize based on role
+    switch (role) {
+      case 'harvester':
+        if (creep.memory.activity === undefined) creep.memory.activity = 'harvesting';
+        if (creep.memory.initiated === undefined) creep.memory.initiated = false;
+        break;
+      case 'upgrader':
+        if (creep.memory.working === undefined) creep.memory.working = false;
+        break;
+      case 'builder':
+        if (creep.memory.working === undefined) creep.memory.working = false;
+        break;
+      case 'archer':
+        // Specific archer initialization
+        break;
     }
   }
   
@@ -172,6 +190,7 @@ export class MemoryManager {
     // Save important values
     const stage = memory.stage;
     const template = memory.template;
+    const mapping = memory.mapping; // Preserve mapping data
     
     // Clear all memory
     for (const prop in memory) {
@@ -192,22 +211,35 @@ export class MemoryManager {
     // Set version
     memory.version = global.config.version;
     
-    // Initialize sources
-    memory.sources = {};
+    // Initialize mapping if it doesn't exist
+    if (!mapping) {
+      // Create new mapping structure
+      memory.mapping = {
+        sources: []
+      };
+    } else {
+      // Restore mapping data
+      memory.mapping = mapping;
+    }
     
     try {
       // Find and record all sources
       const sources = RoomCache.get(room, FIND_SOURCES);
-      for (const source of sources) {
-        if (source && source.id) {
-          memory.sources[source.id] = {
-            id: source.id,
-            pos: {
+      
+      // Initialize sources in mapping if they don't exist
+      if (!memory.mapping.sources || memory.mapping.sources.length === 0) {
+        memory.mapping.sources = [];
+        
+        for (const source of sources) {
+          if (source && source.id) {
+            // Add source to mapping with harvester spots (default to 2)
+            memory.mapping.sources.push({
+              id: source.id,
               x: source.pos.x,
               y: source.pos.y,
-              roomName: source.pos.roomName
-            }
-          };
+              spots: 2 // Allow 2 harvesters per source by default
+            });
+          }
         }
       }
     } catch (e) {
